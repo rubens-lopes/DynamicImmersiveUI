@@ -26,7 +26,7 @@ Dynamic Immersive UI is for players who want to see the world, not the interface
 - Being in a group doesn't bring it back; only combat does. A dead target doesn't either: only the loot window shows.
 - The world map, the loot window and your bags show on their own, with the rest of the UI still hidden.
 - Chat works with the UI hidden: press Enter and type. It fades away 5 seconds after you're done.
-- Tooltips, the breath bar and the yellow quest progress text always show.
+- The minimap, tooltips, the breath bar and the yellow quest progress text always show.
 - Your arrow on the world map is hidden.
 - Esc brings the UI back until something changes; Esc again opens the game menu.
 
@@ -37,13 +37,14 @@ Every switch is in the options panel: type `/dui-options`, or Esc > Options > Ad
 - **Hide the UI out of combat**
 - **A target brings the UI back**
 - **Map, loot window and bags on their own**
+- **Minimap always visible**
 - **Hide your arrow on the world map**
 
 **Commands**
 
 - `/dui-help` lists the commands.
 - `/dui-options` opens the options panel.
-- `/dui-hide`, `/dui-target`, `/dui-solo`, `/dui-arrow` each take `on` or `off`; with no argument they toggle.
+- `/dui-hide`, `/dui-target`, `/dui-solo`, `/dui-minimap`, `/dui-arrow` each take `on` or `off`; with no argument they toggle.
 - `/dui-status` shows what the addon sees. Include it in bug reports.
 
 Settings are saved per account.

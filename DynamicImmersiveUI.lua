@@ -33,6 +33,8 @@ local OPTIONS = {
       help = "Out of combat, the world map, the loot window and your bags show with the rest of the UI still hidden. "
           .. "Turn this off to have them bring the whole UI back. Other windows (character sheet, spellbook, "
           .. "quests, vendors…) always bring the UI back." },
+    { key = "minimap", command = "minimap", label = "Minimap always visible",
+      help = "Keeps the minimap on screen while the rest of the UI is hidden. Turn this off to hide it with the UI." },
     { key = "arrow", command = "arrow", label = "Hide your arrow on the world map",
       help = "Hides the arrow that marks where you are on the world map, so you find your way like a traveller. "
           .. "Party and raid members still show." },
@@ -101,6 +103,10 @@ local ALWAYS = {
     "GameTooltip", "ShoppingTooltip1", "ShoppingTooltip2", "ItemRefTooltip", "UIErrorsFrame",
 }
 
+-- Also always visible while the minimap option is on. The cluster holds the
+-- minimap; Minimap itself counts only if something moved it out.
+local MINIMAP = { "MinimapCluster", "Minimap" }
+
 local function Solo(name)
     return settings.solo and not inCombat and isSolo[name]
 end
@@ -153,12 +159,16 @@ local function SyncStage()
         end
         -- Only the ones directly under UIParent: a mirror timer inside its
         -- container moves with it.
-        for _, name in ipairs(ALWAYS) do
-            local frame = _G[name]
-            if type(frame) == "table" and frame.GetParent and (staged[frame] or frame:GetParent() == UIParent) then
-                want[frame] = name
+        local function Keep(names)
+            for _, name in ipairs(names) do
+                local frame = _G[name]
+                if type(frame) == "table" and frame.GetParent and (staged[frame] or frame:GetParent() == UIParent) then
+                    want[frame] = name
+                end
             end
         end
+        Keep(ALWAYS)
+        if settings.minimap then Keep(MINIMAP) end
         for i = 1, NUM_CHAT_WINDOWS or 10 do
             for _, name in ipairs({ "ChatFrame" .. i, "ChatFrame" .. i .. "EditBox" }) do
                 local frame = _G[name]
@@ -576,6 +586,8 @@ SLASH_DUITARGET1 = "/dui-target"
 SlashCmdList.DUITARGET = MakeToggle("target")
 SLASH_DUISOLO1 = "/dui-solo"
 SlashCmdList.DUISOLO = MakeToggle("solo")
+SLASH_DUIMINIMAP1 = "/dui-minimap"
+SlashCmdList.DUIMINIMAP = MakeToggle("minimap")
 SLASH_DUIARROW1 = "/dui-arrow"
 SlashCmdList.DUIARROW = MakeToggle("arrow")
 SLASH_DUISTATUS1 = "/dui-status"
