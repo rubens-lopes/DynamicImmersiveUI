@@ -1,6 +1,8 @@
 std = "lua51"
 max_line_length = false
 exclude_files = { ".release" }
+-- The test stubs are methods that ignore self.
+files["tests/"] = { self = false }
 
 globals = {
     "DynamicImmersiveUIDB",
