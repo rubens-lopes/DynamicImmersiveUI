@@ -31,7 +31,7 @@ local OPTIONS = {
           .. "A dead target doesn't count: only the loot window shows." },
     { key = "solo", command = "solo", label = "Map, loot window and bags on their own",
       help = "Out of combat, the world map, the loot window and your bags show with the rest of the UI still hidden. "
-          .. "Turn this off to have them bring the whole UI back. Other windows (character sheet, spellbook, "
+          .. "So does any window you open by clicking a minimap button. Esc closes them. Turn this off to have them bring the whole UI back. Other windows (character sheet, spellbook, "
           .. "quests, vendors…) always bring the UI back." },
     { key = "minimap", command = "minimap", label = "Minimap always visible",
       help = "Keeps the minimap on screen while the rest of the UI is hidden. Turn this off to hide it with the UI." },
@@ -94,6 +94,11 @@ local SOLO = { "WorldMapFrame", "LootFrame" }
 for _, name in ipairs(BAGS) do SOLO[#SOLO + 1] = name end
 local isSolo = {}
 for _, name in ipairs(SOLO) do isSolo[name] = true end
+local isBag = {}
+for _, name in ipairs(BAGS) do isBag[name] = true end
+-- Windows opened by a click on something shown with the UI hidden (a minimap
+-- button, say) also show on their own: frame -> name. Cleared when they close.
+local extra = {}
 
 -- Always visible, even with the UI hidden: the breath bar (mirror timers),
 -- tooltips, and the yellow quest progress text (UIErrorsFrame, which also
@@ -101,30 +106,50 @@ for _, name in ipairs(SOLO) do isSolo[name] = true end
 local ALWAYS = {
     "MirrorTimerContainer", "MirrorTimer1", "MirrorTimer2", "MirrorTimer3",
     "GameTooltip", "ShoppingTooltip1", "ShoppingTooltip2", "ItemRefTooltip", "UIErrorsFrame",
+    -- Lua error popups, so a bug isn't invisible.
+    "ScriptErrorsFrame",
 }
 
 -- Also always visible while the minimap option is on. The cluster holds the
 -- minimap; Minimap itself counts only if something moved it out.
 local MINIMAP = { "MinimapCluster", "Minimap" }
 
-local function Solo(name)
-    return settings.solo and not inCombat and isSolo[name]
+local function Solo(name, frame)
+    return settings.solo and not inCombat and (isSolo[name] or (frame ~= nil and extra[frame] ~= nil))
 end
 
-local stage = CreateFrame("Frame", "DynamicImmersiveUIStage")
-stage:SetAllPoints(UIParent)
-stage:SetScale(UIParent:GetScale())
-stage:SetFrameStrata("BACKGROUND")
+-- One stage per strata. SetParent hands the new parent's strata down to the
+-- frame and everything in it; setting the frame's own strata back afterwards
+-- doesn't reach its children, and a bag ends up drawn over its own buttons.
+-- On a stage of its own strata, nothing needs setting back.
+local stages = {}
+local isStage = {}
 
--- frame -> { name, parent, alpha } while it sits on the stage.
+local function GetStage(strata)
+    local stage = stages[strata]
+    if not stage then
+        stage = CreateFrame("Frame", "DynamicImmersiveUIStage" .. strata)
+        stage:SetAllPoints(UIParent)
+        stage:SetFrameStrata(strata)
+        stages[strata] = stage
+        isStage[stage] = true
+    end
+    stage:SetScale(UIParent:GetScale())
+    return stage
+end
+
+-- frame -> { name, parent, alpha, strata, solo } while it sits on a stage.
+-- solo: a window that Esc closes.
 local staged = {}
 
-local function Stage(name, frame)
+local function Stage(name, frame, solo)
     if staged[frame] then return end
     if frame:IsProtected() and InCombatLockdown() then return end
-    local saved = { name = name, parent = frame:GetParent(), alpha = frame:GetAlpha() }
-    stage:SetScale(UIParent:GetScale())
-    if Try("show " .. name .. " on its own", frame.SetParent, frame, stage) then staged[frame] = saved end
+    local saved = { name = name, parent = frame:GetParent(), alpha = frame:GetAlpha(),
+        strata = frame:GetFrameStrata(), solo = solo }
+    if Try("show " .. name .. " on its own", frame.SetParent, frame, GetStage(saved.strata)) then
+        staged[frame] = saved
+    end
 end
 
 local function Unstage(frame)
@@ -134,6 +159,9 @@ local function Unstage(frame)
     staged[frame] = nil
     Try("put " .. saved.name .. " back", function()
         frame:SetParent(saved.parent)
+        -- Only frames that had a strata of their own, like tooltips: a bag
+        -- is already right, and setting it would cover its buttons.
+        if frame:GetFrameStrata() ~= saved.strata then frame:SetFrameStrata(saved.strata) end
         frame:SetAlpha(saved.alpha)
     end)
 end
@@ -151,11 +179,15 @@ end
 local function SyncStage()
     local hidden = not UIParent:IsShown()
     local want = {}
+    local solo = {}
     local chats = {}
     if hidden then
         for _, name in ipairs(SOLO) do
             local frame = _G[name]
-            if frame and frame:IsShown() and Solo(name) then want[frame] = name end
+            if frame and frame:IsShown() and Solo(name) then want[frame], solo[frame] = name, true end
+        end
+        for frame, name in pairs(extra) do
+            if frame:IsShown() and Solo(name, frame) then want[frame], solo[frame] = name, true end
         end
         -- Only the ones directly under UIParent: a mirror timer inside its
         -- container moves with it.
@@ -179,7 +211,7 @@ local function SyncStage()
                 end
             end
         end
-        for frame, name in pairs(want) do Stage(name, frame) end
+        for frame, name in pairs(want) do Stage(name, frame, solo[frame]) end
         local alpha = ChatActive() and 1 or 0
         for _, frame in ipairs(chats) do
             if staged[frame] then frame:SetAlpha(alpha) end
@@ -211,10 +243,14 @@ local panels = {}
 local function OpenWindow()
     for _, name in ipairs(WINDOWS) do
         local frame = _G[name]
-        if type(frame) == "table" and frame.IsShown and frame:IsShown() and not Solo(name) then return name end
+        if type(frame) == "table" and frame.IsShown and frame:IsShown() and not Solo(name, frame) then return name end
     end
     for frame, name in pairs(panels) do
-        if frame:IsShown() and not Solo(name) then return name end
+        if frame:IsShown() and not Solo(name, frame) then return name end
+    end
+    -- Solo off: a window from a minimap click brings the UI back.
+    for frame, name in pairs(extra) do
+        if frame:IsShown() and not Solo(name, frame) then return name end
     end
 end
 
@@ -259,7 +295,7 @@ local function BagAlone()
     Try("open your bags", fn, bag.arg)
     for _, name in ipairs(BAGS) do
         local frame = _G[name]
-        if frame and frame:IsShown() then Stage(name, frame) end
+        if frame and frame:IsShown() then Stage(name, frame, true) end
     end
     SetUI(false)
 end
@@ -312,9 +348,15 @@ end
 ---------------------------------------------------------------------------
 
 local hooked = {}
+-- A click on something shown with the UI hidden is in progress: windows it
+-- opens join extra. before: UIParent's children shown when it started.
+local clicking = false
+local clickId = 0
+local before
 
 -- A window shown while the UI is hidden is invisible: show the UI and reopen it.
 local function NoteHiddenPanel(name, frame)
+    if clicking then extra[frame] = name end
     if settings.hideUI and not UIParent:IsShown() and not ours and not inCombat and not Solo(name)
         and not pendingPanel then
         pendingPanel = { name = name, frame = frame }
@@ -331,6 +373,7 @@ local function HookWindow(name, frame)
     end)
     frame:HookScript("OnHide", function()
         if staged[frame] then Unstage(frame) end
+        extra[frame] = nil
         if name == "GameMenuFrame" then manual = false end
         Evaluate()
     end)
@@ -389,6 +432,104 @@ local function HookPanels()
         end
         Evaluate()
     end)
+end
+
+-- Clicks on the stage: the minimap and its addon buttons, bags, the map, chat.
+local function OnStage(region)
+    while region do
+        if isStage[region] then return true end
+        region = region.GetParent and region:GetParent()
+    end
+    return false
+end
+
+local function MouseOnStage()
+    local foci = GetMouseFoci and GetMouseFoci() or { GetMouseFocus and GetMouseFocus() }
+    for _, region in ipairs(foci) do
+        if OnStage(region) then return true end
+    end
+    return false
+end
+
+local function ShownChildren()
+    local shown = {}
+    for _, child in ipairs({ UIParent:GetChildren() }) do
+        -- Forbidden frames (Blizzard's secure ones) error on anything but
+        -- IsForbidden. Windows take the mouse; helper frames mostly don't.
+        if not (child.IsForbidden and child:IsForbidden()) and child:IsShown()
+            and not (child.IsMouseEnabled and not child:IsMouseEnabled()) then
+            shown[child] = true
+        end
+    end
+    return shown
+end
+
+-- Only for as long as it's open: shown again later, on its own, it's none of
+-- our business (it may not even be a window).
+local extraHooked = {}
+local function HookExtra(frame)
+    if hooked[frame] or extraHooked[frame] then return end
+    extraHooked[frame] = true
+    frame:HookScript("OnHide", function()
+        if not extra[frame] then return end
+        extra[frame] = nil
+        if staged[frame] then Unstage(frame) end
+        Evaluate()
+    end)
+end
+
+-- Windows the click opened without ShowUIPanel (most addon windows): any of
+-- UIParent's children shown since the click started.
+local function ScanClick()
+    if not before then return end
+    for child in pairs(ShownChildren()) do
+        if not before[child] then
+            before[child] = true
+            extra[child] = child:GetName() or "a window"
+            HookExtra(child)
+        end
+    end
+    Evaluate()
+end
+
+local function ClickStarted()
+    if UIParent:IsShown() or inCombat or not settings.hideUI or not MouseOnStage() then return end
+    clickId = clickId + 1
+    clicking = true
+    before = ShownChildren()
+end
+
+local function ClickEnded()
+    if not clicking then return end
+    local id = clickId
+    C_Timer.After(0, ScanClick)
+    -- Some windows open a moment later.
+    C_Timer.After(0.2, function()
+        ScanClick()
+        if id == clickId then clicking, before = false, nil end
+    end)
+end
+
+-- Esc with a window on its own: Blizzard shows the UI instead of closing it
+-- (Game.lua). Close the window ourselves and keep the UI hidden.
+local function CloseSolo()
+    local open = {}
+    for frame, saved in pairs(staged) do
+        if saved.solo and frame:IsShown() then open[frame] = saved.name end
+    end
+    if not next(open) then return false end
+    for frame, name in pairs(open) do
+        if isBag[name] and CloseAllBags then
+            Try("close your bags", CloseAllBags)
+        elseif name == "LootFrame" and CloseLoot then
+            Try("close the loot window", CloseLoot)
+        elseif panels[frame] and HideUIPanel then
+            Try("close " .. name, HideUIPanel, frame)
+        end
+        if frame:IsShown() then Try("close " .. name, frame.Hide, frame) end
+    end
+    Evaluate()
+    return true
 end
 
 ---------------------------------------------------------------------------
@@ -451,8 +592,11 @@ function EVENTS.PLAYER_LOGIN()
     HookPanels()
     HookMap()
     UIParent:HookScript("OnShow", function()
-        -- Esc or Alt+Z: keep the UI until the next change.
-        if not ours and settings.hideUI then manual = true end
+        if ours or not settings.hideUI then return end
+        -- Esc or Alt+Z with a window on its own closes the window.
+        if CloseSolo() then return end
+        -- Otherwise keep the UI until the next change.
+        manual = true
     end)
     loaded = true
 end
@@ -483,12 +627,16 @@ end
 function EVENTS.UNIT_HEALTH() Evaluate() end
 EVENTS.UNIT_FLAGS = EVENTS.UNIT_HEALTH
 
+EVENTS.GLOBAL_MOUSE_DOWN = ClickStarted
+EVENTS.GLOBAL_MOUSE_UP = ClickEnded
+
 local listener = CreateFrame("Frame")
 for event in pairs(EVENTS) do
     if event == "UNIT_HEALTH" or event == "UNIT_FLAGS" then
         listener:RegisterUnitEvent(event, "target")
     else
-        listener:RegisterEvent(event)
+        -- pcall: an event this client doesn't have only loses its feature.
+        pcall(listener.RegisterEvent, listener, event)
     end
 end
 listener:SetScript("OnEvent", function(_, event, ...) EVENTS[event](...) end)
@@ -561,6 +709,10 @@ local function Status()
     for _, saved in pairs(staged) do names[#names + 1] = saved.name end
     table.sort(names)
     Line("  on their own: " .. (#names > 0 and table.concat(names, ", ") or "nothing"))
+    names = {}
+    for frame, name in pairs(extra) do names[#names + 1] = name .. (frame:IsShown() and "" or " (closed)") end
+    table.sort(names)
+    Line("  opened by a click: " .. (#names > 0 and table.concat(names, ", ") or "nothing"))
     local dead = UnitIsDead("target")
     Line(("  target: %s, dead: %s"):format(tostring(UnitExists("target")),
         issecretvalue and issecretvalue(dead) and "secret" or tostring(dead)))

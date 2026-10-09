@@ -20,8 +20,12 @@ globals = {
 read_globals = {
     "C_Timer",
     "CloseAllBags",
+    "CloseLoot",
     "CreateFrame",
+    "GetMouseFocus",
+    "GetMouseFoci",
     "GetTime",
+    "HideUIPanel",
     "hooksecurefunc",
     "InCombatLockdown",
     "InterfaceOptions_AddCategory",

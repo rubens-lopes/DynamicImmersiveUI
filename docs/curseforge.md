@@ -25,7 +25,7 @@ Dynamic Immersive UI is for players who want to see the world, not the interface
 - Out of combat, the whole UI hides, the way Alt+Z hides it.
 - It comes back when combat starts, while you have a living target, or while a window is open (character sheet, spellbook, quests, vendors, the game menu…).
 - Being in a group doesn't bring it back; only combat does. A dead target doesn't either: only the loot window shows.
-- The world map, the loot window and your bags show on their own, with the rest of the UI still hidden.
+- The world map, the loot window, your bags and windows opened from a minimap button show on their own, with the rest of the UI still hidden. Esc closes them.
 - Chat works with the UI hidden: press Enter and type. It fades away 5 seconds after you're done.
 - The minimap, tooltips, the breath bar and the yellow quest progress text always show.
 - Your arrow on the world map is hidden.
@@ -37,7 +37,7 @@ Every switch is in the options panel: type `/dui-options`, or Esc > Options > Ad
 
 - **Hide the UI out of combat**
 - **A target brings the UI back**
-- **Map, loot window and bags on their own**
+- **Map, loot window and bags on their own** (and windows opened from a minimap button)
 - **Minimap always visible**
 - **Hide your arrow on the world map**
 

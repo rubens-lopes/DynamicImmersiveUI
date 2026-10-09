@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.0-beta2
+
+- Windows opened by clicking a minimap button (addon settings, the dungeon journal…) show on their own instead of bringing the whole UI back.
+- Esc closes the bags, map, loot window or minimap window shown on their own, and the UI stays hidden.
+- Tooltips no longer show behind the minimap and windows.
+- Lua error popups show with the UI hidden.
+
 ## v0.1.0-beta1
 
 - First beta for World of Warcraft: Forever.

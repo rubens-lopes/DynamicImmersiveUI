@@ -17,7 +17,7 @@ local function Load(opts)
     local frames = {}
     local function NewFrame(name, parent, shown)
         local f = { name = name, parent = parent, shown = shown ~= false, alpha = 1, scripts = {}, hooks = {},
-            events = {} }
+            events = {}, strata = "MEDIUM", level = 1 }
         function f:GetName() return self.name end
         function f:IsShown() return self.shown end
         function f:IsVisible()
@@ -42,7 +42,31 @@ local function Load(opts)
             self.shown = false
             Run(self, "OnHide")
         end
-        function f:SetParent(p) self.parent = p end
+        -- Like the client, a new parent hands down its strata, and the frame
+        -- and its children are renumbered from the parent's level.
+        -- SetFrameStrata, below, changes only the frame itself.
+        local function Renumber(frame, level, strata)
+            frame.level = level
+            frame.strata = strata
+            for _, child in ipairs(frames) do
+                if child.parent == frame then Renumber(child, level + 1, strata) end
+            end
+        end
+        function f:SetParent(p)
+            self.parent = p
+            Renumber(self, p and p.level + 1 or 1, p and p.strata or "MEDIUM")
+        end
+        function f:GetFrameStrata() return self.strata end
+        function f:SetFrameStrata(s) self.strata = s end
+        function f:GetFrameLevel() return self.level end
+        function f:SetFrameLevel(l) self.level = l end
+        function f:GetChildren()
+            local children = {}
+            for _, child in ipairs(frames) do
+                if child.parent == self then children[#children + 1] = child end
+            end
+            return unpack(children)
+        end
         function f:GetParent() return self.parent end
         function f:SetAlpha(a) self.alpha = a end
         function f:GetAlpha() return self.alpha end
@@ -57,7 +81,6 @@ local function Load(opts)
         function f:SetAllPoints() end
         function f:SetScale() end
         function f:GetScale() return 1 end
-        function f:SetFrameStrata() end
         function f:HasFocus() return self.focus == true end
         frames[#frames + 1] = f
         if name then G[name] = f end
@@ -106,7 +129,7 @@ local function Load(opts)
     NewFrame("ContainerFrameCombinedBags", UIParent, false)
     NewFrame("ChatFrame1", UIParent, true)
     NewFrame("ChatFrame1EditBox", UIParent, true)
-    NewFrame("GameTooltip", UIParent, false)
+    NewFrame("GameTooltip", UIParent, false).strata = "TOOLTIP"
     NewFrame("UIErrorsFrame", UIParent, true)
     local cluster = NewFrame("MinimapCluster", UIParent, true)
     NewFrame("Minimap", cluster, true)
@@ -126,6 +149,12 @@ local function Load(opts)
         env.calls[#env.calls + 1] = "ShowUIPanel " .. f:GetName()
         f:Show()
     end
+    G.HideUIPanel = function(f)
+        env.calls[#env.calls + 1] = "HideUIPanel " .. f:GetName()
+        f:Hide()
+    end
+    -- What the mouse is over.
+    G.GetMouseFoci = function() return { env.mouse } end
     -- Bags refuse to open or close while the UI is hidden.
     local bags = G.ContainerFrameCombinedBags
     G.ToggleBackpack = function()
@@ -166,8 +195,10 @@ local function Load(opts)
         end
     end
     function env.Slash(name, arg) G.SlashCmdList[name](arg) end
-    function env.Stage() return G.DynamicImmersiveUIStage end
-    function env.OnStage(name) return G[name].parent == G.DynamicImmersiveUIStage end
+    function env.OnStage(name)
+        local parent = G[name].parent
+        return parent ~= nil and parent.name ~= nil and parent.name:find("^DynamicImmersiveUIStage") ~= nil
+    end
 
     local chunk = assert(loadfile(ADDON_FILE))
     setfenv(chunk, G)
@@ -353,6 +384,127 @@ Test("tooltips, quest text and the breath bar stay visible", function()
     Eq(env.G.UIErrorsFrame.alpha, 1, "quest text alpha")
     env.Fire("PLAYER_REGEN_DISABLED")
     Eq(env.G.GameTooltip.parent, env.UIParent, "tooltip parent in combat")
+end)
+
+Test("tooltips keep their strata on the stage and back", function()
+    local env = Load()
+    Eq(env.G.GameTooltip.strata, "TOOLTIP", "strata on the stage")
+    env.Fire("PLAYER_REGEN_DISABLED")
+    Eq(env.G.GameTooltip.parent, env.UIParent, "tooltip parent in combat")
+    Eq(env.G.GameTooltip.strata, "TOOLTIP", "strata back on UIParent")
+end)
+
+Test("a bag on the stage stays under its own buttons", function()
+    local env = Load()
+    local bags = env.G.ContainerFrameCombinedBags
+    bags.level = 10
+    local sort = env.NewFrame("BagItemAutoSortButton", bags, true)
+    sort.level = 11
+    env.G.ToggleBackpack()
+    env.Tick()
+    Eq(env.OnStage("ContainerFrameCombinedBags"), true, "bag on the stage")
+    Eq(sort.level > bags.level, true, "sort button above the bag")
+    Eq(sort.strata, bags.strata, "sort button strata")
+    env.G.ToggleBackpack()
+    env.Tick()
+    Eq(bags.parent, env.UIParent, "bag parent after closing")
+    Eq(sort.strata, bags.strata, "sort button strata after closing")
+end)
+
+Test("Esc closes a bag shown on its own and keeps the UI hidden", function()
+    local env = Load()
+    local bags = env.G.ContainerFrameCombinedBags
+    env.G.ToggleBackpack()
+    env.Tick()
+    Eq(bags.shown, true, "bag open")
+    env.UIParent:Show() -- Blizzard's Esc
+    env.Tick()
+    Eq(bags.shown, false, "bag open after Esc")
+    Eq(env.UIParent.shown, false, "UI shown after Esc")
+    env.UIParent:Show() -- Esc again, nothing open: the UI comes back
+    env.Tick()
+    Eq(env.UIParent.shown, true, "UI shown after the second Esc")
+end)
+
+-- A minimap button: a child of the minimap, which sits on the stage.
+local function Click(env, fn)
+    env.mouse = env.NewFrame("LibDBIcon10_Addon", env.G.Minimap, true)
+    env.Fire("GLOBAL_MOUSE_DOWN", "LeftButton")
+    fn()
+    env.Fire("GLOBAL_MOUSE_UP", "LeftButton")
+    env.Tick()
+end
+
+Test("a minimap button's window shows on its own; Esc closes it", function()
+    local env = Load()
+    local window = env.NewFrame("SomeAddonConfig", env.UIParent, false)
+    Click(env, function() window:Show() end)
+    Eq(env.UIParent.shown, false, "UI shown")
+    Eq(env.OnStage("SomeAddonConfig"), true, "window on the stage")
+    env.Tick(0.3)
+    Eq(env.OnStage("SomeAddonConfig"), true, "window on the stage after the click")
+    env.UIParent:Show() -- Esc
+    env.Tick()
+    Eq(window.shown, false, "window open after Esc")
+    Eq(window.parent, env.UIParent, "window parent after Esc")
+    Eq(env.UIParent.shown, false, "UI shown after Esc")
+end)
+
+Test("a panel opened from the minimap shows on its own too", function()
+    local env = Load()
+    local journal = env.NewFrame("EncounterJournal", env.UIParent, false)
+    Click(env, function() env.G.ShowUIPanel(journal) end)
+    env.Tick()
+    Eq(env.UIParent.shown, false, "UI shown")
+    Eq(env.OnStage("EncounterJournal"), true, "journal on the stage")
+    journal:Hide()
+    env.Tick(0.3)
+    -- Opened later some other way, it brings the UI back as before.
+    env.mouse = nil
+    env.G.ShowUIPanel(journal)
+    env.Tick()
+    env.Tick()
+    Eq(env.UIParent.shown, true, "UI shown when opened without a click")
+end)
+
+Test("a closed minimap window showing itself later leaves the UI hidden", function()
+    local env = Load()
+    local window = env.NewFrame("SomeAddonConfig", env.UIParent, false)
+    Click(env, function() window:Show() end)
+    env.Tick(0.3)
+    window:Hide()
+    env.Tick()
+    Eq(window.parent, env.UIParent, "window parent after closing")
+    env.mouse = nil
+    window:Show() -- the addon, on its own
+    env.Tick()
+    env.Tick()
+    Eq(env.UIParent.shown, false, "UI shown")
+    for _, call in ipairs(env.calls) do
+        Eq(call:find("ShowUIPanel") == nil, true, "no ShowUIPanel on an addon frame")
+    end
+    env.Slash("DUISTATUS")
+end)
+
+Test("a minimap click skips forbidden frames", function()
+    local env = Load()
+    local forbidden = env.NewFrame(nil, env.UIParent, true)
+    function forbidden:IsForbidden() return true end
+    function forbidden:IsShown() error("calling 'IsShown' on bad self") end
+    local window = env.NewFrame("SomeAddonConfig", env.UIParent, false)
+    Click(env, function() window:Show() end)
+    Eq(env.OnStage("SomeAddonConfig"), true, "window on the stage")
+end)
+
+Test("a click in the world doesn't make windows show on their own", function()
+    local env = Load()
+    local window = env.NewFrame("SomeAddonConfig", env.UIParent, false)
+    env.mouse = nil
+    env.Fire("GLOBAL_MOUSE_DOWN", "LeftButton")
+    window:Show()
+    env.Fire("GLOBAL_MOUSE_UP", "LeftButton")
+    env.Tick()
+    Eq(env.OnStage("SomeAddonConfig"), false, "window on the stage")
 end)
 
 Test("the minimap stays visible, unless /dui-minimap off", function()

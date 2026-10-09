@@ -8,7 +8,7 @@ A World of Warcraft: Forever addon for immersion. The whole UI hides the way Alt
 
 Being in a group doesn't bring it back; only combat does. A dead target doesn't either: loot it and only the loot window shows.
 
-Out of combat, the world map, the loot window and your bags show **on their own**, with the rest of the UI still hidden. Chat works too: press Enter and type as usual, and chat fades away 5 seconds after you're done. The minimap, tooltips, the breath bar and the yellow quest progress text ("Wolf Pelt: 3/8") always show.
+Out of combat, the world map, the loot window, your bags and any window you open from a minimap button show **on their own**, with the rest of the UI still hidden; Esc closes them. Chat works too: press Enter and type as usual, and chat fades away 5 seconds after you're done. The minimap, tooltips, the breath bar and the yellow quest progress text ("Wolf Pelt: 3/8") always show.
 
 Your arrow on the world map is hidden, so you find your way from the landmarks.
 
@@ -20,7 +20,7 @@ Open the panel with `/dui-options`, or Esc > Options > AddOns > Dynamic Immersiv
 
 - **Hide the UI out of combat**: the main switch. Off, the addon leaves the UI alone.
 - **A target brings the UI back**: shows the UI while you have a living target.
-- **Map, loot window and bags on their own**: off, these bring the whole UI back like any other window.
+- **Map, loot window and bags on their own**: also windows opened from a minimap button. Off, these bring the whole UI back like any other window.
 - **Minimap always visible**: keeps the minimap on screen while the rest of the UI is hidden.
 - **Hide your arrow on the world map**: party and raid members still show.
 
