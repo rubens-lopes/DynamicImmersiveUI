@@ -8,6 +8,7 @@ Paste these into the project form at https://authors.curseforge.com/#/projects/c
 - **Primary category:** Miscellaneous
 - **Additional category:** Map & Minimap
 - **License:** MIT License
+- **Logo:** `media/logo.png`
 - **Source:** https://github.com/rubens-lopes/DynamicImmersiveUI
 - **Issues:** https://github.com/rubens-lopes/DynamicImmersiveUI/issues
 
