@@ -50,6 +50,10 @@ local loaded = false
 local inCombat = false
 -- True while we're the ones showing or hiding the UI.
 local ours = false
+-- We switched the UI off. Another addon showing UIParent (DynamicCam does on
+-- entering combat) leaves the engine's side off, nameplates included, so
+-- only SetUIVisibility(true) counts as back on.
+local uiOff = false
 -- Blizzard showed the UI itself (Esc or Alt+Z). Kept until the next change.
 local manual = false
 -- A bag key pressed while the UI was hidden: { name, fn, arg }.
@@ -80,7 +84,7 @@ end
 
 local function SetUI(show)
     ours = true
-    Try(show and "show the UI" or "hide the UI", SetUIVisibility, show)
+    if Try(show and "show the UI" or "hide the UI", SetUIVisibility, show) then uiOff = not show end
     ours = false
 end
 
@@ -176,6 +180,7 @@ end
 -- every chat frame and edit box, faded out unless you're typing. Chat has to
 -- be there before Enter is pressed: moving an edit box and focusing it
 -- yourself breaks sending (ChatFrameEditBox.lua).
+
 local function SyncStage()
     local hidden = not UIParent:IsShown()
     local want = {}
@@ -312,7 +317,7 @@ EvaluateNow = function()
     if not loaded then return end
     if pendingBag and settings.solo and not UIParent:IsShown() and not inCombat then BagAlone() end
     local why = Wanted()
-    if why and not UIParent:IsShown() then
+    if why and (uiOff or not UIParent:IsShown()) then
         SetUI(true)
     elseif not why and UIParent:IsShown() and not InCombatLockdown() then
         SetUI(false)
@@ -723,7 +728,7 @@ end
 local function Options()
     -- The panel is part of the UI: bring it back first, or the panel manager
     -- closes the panel as the UI comes back. The open panel keeps it shown.
-    if not UIParent:IsShown() and not InCombatLockdown() then SetUI(true) end
+    if (uiOff or not UIParent:IsShown()) and not InCombatLockdown() then SetUI(true) end
     if ns.OpenOptions then return ns.OpenOptions() end
     Say("the options panel isn't available on this client. Use /dui-help for the commands.")
 end

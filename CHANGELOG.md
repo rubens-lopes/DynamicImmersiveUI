@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.1
+
+- Fixed: with DynamicCam installed, nameplates didn't show for a whole fight that started while the UI was hidden.
+
 ## v0.1.0-beta2
 
 - Windows opened by clicking a minimap button (addon settings, the dungeon journal…) show on their own instead of bringing the whole UI back.

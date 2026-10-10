@@ -252,6 +252,15 @@ Test("shows the UI right away when combat starts, hides it after", function()
     Eq(env.UIParent.shown, false, "UI shown after combat")
 end)
 
+-- DynamicCam shows UIParent first; only SetUIVisibility brings nameplates back.
+Test("combat turns the UI back on after another addon showed UIParent", function()
+    local env = Load()
+    env.UIParent:Show()
+    env.visibility = {}
+    env.Fire("PLAYER_REGEN_DISABLED")
+    Eq(env.visibility[1], true, "SetUIVisibility(true) called")
+end)
+
 Test("a living target shows the UI, a dead one doesn't", function()
     local env = Load()
     env.unit.exists = true
