@@ -420,7 +420,9 @@ local before
 local function NoteHiddenPanel(name, frame)
     if clicking then extra[frame] = name end
     if not settings.hideUI or UIParent:IsShown() or ours or inCombat then return end
-    if isInteraction[name] then
+    -- A window opened from one (a letter, a confirmation) joins it: the UI
+    -- coming back would close the mailbox.
+    if isInteraction[name] or next(talking) then
         talking[frame] = name
     elseif not Solo(name) and not pendingPanel then
         pendingPanel = { name = name, frame = frame }

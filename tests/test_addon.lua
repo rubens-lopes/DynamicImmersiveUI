@@ -207,6 +207,9 @@ local function Load(opts)
         G.ShowUIPanel(mailbox)
         G.OpenAllBags(mailbox)
     end
+    -- A letter opens in a window of its own (InboxFrame_OnClick).
+    local letter = NewFrame("OpenMailFrame", UIParent, false)
+    function env.OpenLetter() G.ShowUIPanel(letter) end
 
     env.unit = { exists = false, dead = false }
     G.UnitExists = function() return env.unit.exists end
@@ -442,6 +445,23 @@ Test("a mailbox opens on its own with your bags, and closes them", function()
     env.Tick()
     Eq(bags.shown, false, "bags open after closing the mail")
     Eq(env.UIParent.shown, false, "UI shown after closing the mail")
+end)
+
+Test("a letter opens on its own and keeps the mailbox open", function()
+    local env = Load()
+    env.OpenMailbox()
+    env.Tick()
+    env.Tick()
+    env.OpenLetter()
+    env.Tick()
+    env.Tick()
+    Eq(env.UIParent.shown, false, "UI shown")
+    Eq(env.mailClosed, nil, "mail closed")
+    Eq(env.OnStage("OpenMailFrame"), true, "letter on the stage")
+    env.G.OpenMailFrame:Hide()
+    env.Tick()
+    Eq(env.UIParent.shown, false, "UI shown after closing the letter")
+    Eq(env.OnStage("MailFrame"), true, "mail on the stage after closing the letter")
 end)
 
 Test("/dui-solo off: a mailbox still opens on its own with your bags", function()

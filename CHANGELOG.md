@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.4
+
+- Fixed: opening a letter at a mailbox brought the UI back and closed the mailbox, so you couldn't take its attachments. Letters, and the confirmations they ask for, now show on their own with the mailbox.
+
 ## v0.1.3
 
 - Fixed: a quest from an object in the world (a table, a wanted poster…) opened empty. Quests, mailboxes and books you open without a target now show on their own, with the UI still hidden.
