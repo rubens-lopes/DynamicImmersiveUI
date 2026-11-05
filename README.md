@@ -8,7 +8,7 @@ A World of Warcraft: Forever addon for immersion. The whole UI hides the way Alt
 
 Being in a group doesn't bring it back; only combat does. A dead target doesn't either: loot it and only the loot window shows.
 
-Out of combat, the world map, the loot window, your bags and any window you open from a minimap button show **on their own**, with the rest of the UI still hidden; Esc closes them. Chat works too: press Enter and type as usual, and chat fades away 5 seconds after you're done. The minimap, tooltips, the breath bar and the yellow quest progress text ("Wolf Pelt: 3/8") always show.
+Out of combat, the world map, the loot window, your bags and any window you open from a minimap button show **on their own**, with the rest of the UI still hidden; Esc closes them. Chat works too: press Enter and type as usual, and chat fades away 5 seconds after you're done. The minimap, tooltips, your cast bar, the breath bar and the yellow quest progress text ("Wolf Pelt: 3/8") always show.
 
 Your arrow on the world map is hidden, so you find your way from the landmarks.
 

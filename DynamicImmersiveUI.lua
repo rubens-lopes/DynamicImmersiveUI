@@ -1,7 +1,7 @@
 -- Hides the whole UI, the way Alt+Z does, unless you're in combat, have a
 -- living target or have a window open. Out of combat the map, the loot
 -- window and bags show on their own, and chat works with the UI hidden. The
--- breath bar, tooltips and quest progress text always show.
+-- cast bar, breath bar, tooltips and quest progress text always show.
 -- Optionally hides your arrow on the world map.
 --
 -- How it works, found with a probe on WoW Forever:
@@ -104,10 +104,12 @@ for _, name in ipairs(BAGS) do isBag[name] = true end
 -- button, say) also show on their own: frame -> name. Cleared when they close.
 local extra = {}
 
--- Always visible, even with the UI hidden: the breath bar (mirror timers),
--- tooltips, and the yellow quest progress text (UIErrorsFrame, which also
--- shows the red error messages).
+-- Always visible, even with the UI hidden: the cast bar (CastingBarFrame on
+-- older clients, PlayerCastingBarFrame on newer ones; the pet's too), the
+-- breath bar (mirror timers), tooltips, and the yellow quest progress text
+-- (UIErrorsFrame, which also shows the red error messages).
 local ALWAYS = {
+    "CastingBarFrame", "PlayerCastingBarFrame", "PetCastingBarFrame",
     "MirrorTimerContainer", "MirrorTimer1", "MirrorTimer2", "MirrorTimer3",
     "GameTooltip", "ShoppingTooltip1", "ShoppingTooltip2", "ItemRefTooltip", "UIErrorsFrame",
     -- Lua error popups, so a bug isn't invisible.

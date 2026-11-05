@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.2
+
+- Your cast bar shows with the UI hidden (hearthstone, mounting, crafting…).
+
 ## v0.1.1
 
 - Fixed: with DynamicCam installed, nameplates didn't show for a whole fight that started while the UI was hidden.
