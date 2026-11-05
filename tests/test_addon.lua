@@ -136,12 +136,30 @@ local function Load(opts)
     local container = NewFrame("MirrorTimerContainer", UIParent, true)
     NewFrame("MirrorTimer1", container, false)
     NewFrame("PlayerCastingBarFrame", UIParent, false)
+    -- Closing the quest window ends the quest dialog, like CloseQuest.
+    local quest = NewFrame("QuestFrame", UIParent, false)
+    quest:HookScript("OnHide", function() env.questClosed = true end)
+    -- Its OnHide reopens the settings (QuickKeybindFrameMixin:OnHide).
+    NewFrame("SettingsPanel", UIParent, false)
+    NewFrame("QuickKeybindFrame", UIParent, false)
+    -- The minimap's mail icon, hidden with its frame like
+    -- MiniMapMailFrameMixin:OnHide.
+    cluster.IndicatorFrame = NewFrame(nil, cluster, true)
+    local mail = NewFrame(nil, cluster.IndicatorFrame, true)
+    cluster.IndicatorFrame.MailFrame = mail
+    mail.MailIcon = { shown = true }
+    function mail.MailIcon:SetShown(shown) self.shown = shown end
+    mail:HookScript("OnHide", function() mail.MailIcon:SetShown(false) end)
+    G.HasNewMail = function() return true end
 
     G.SetUIVisibility = function(show)
         env.visibility[#env.visibility + 1] = show
         if show then
             UIParent:Show()
+            -- Blizzard closes every window (CloseAllWindows).
             G.CharacterFrame:Hide()
+            quest:Hide()
+            G.MailFrame:Hide()
         else
             UIParent:Hide()
         end
@@ -156,16 +174,38 @@ local function Load(opts)
     end
     -- What the mouse is over.
     G.GetMouseFoci = function() return { env.mouse } end
-    -- Bags refuse to open or close while the UI is hidden.
+    -- Bags refuse to open while the frame they live in is hidden: UIParent,
+    -- unless ContainerFrame_SetFullScreenFrame says otherwise.
     local bags = G.ContainerFrameCombinedBags
+    local bagsBar = NewFrame("BagsBar", UIParent, true)
+    local fullscreen = UIParent
+    if not opts.oldBags then
+        G.ContainerFrame_SetFullScreenFrame = function(f)
+            fullscreen = f
+            bags:SetParent(f)
+            bagsBar:SetParent(f)
+        end
+        G.ContainerFrame_ClearFullScreenFrame = function() G.ContainerFrame_SetFullScreenFrame(UIParent) end
+    end
     G.ToggleBackpack = function()
         env.calls[#env.calls + 1] = "ToggleBackpack"
-        if not UIParent.shown then return end
+        if not fullscreen.shown then return end
         if bags.shown then bags:Hide() else bags:Show() end
+    end
+    G.OpenAllBags = function()
+        env.calls[#env.calls + 1] = "OpenAllBags"
+        if fullscreen.shown then bags:Show() end
     end
     G.CloseAllBags = function()
         env.calls[#env.calls + 1] = "CloseAllBags"
-        if UIParent.shown then bags:Hide() end
+        bags:Hide()
+    end
+    -- A mailbox: the mail window, then the bags (MailFrame_Show).
+    local mailbox = NewFrame("MailFrame", UIParent, false)
+    mailbox:HookScript("OnHide", function() env.mailClosed = true end)
+    function env.OpenMailbox()
+        G.ShowUIPanel(mailbox)
+        G.OpenAllBags(mailbox)
     end
 
     env.unit = { exists = false, dead = false }
@@ -368,6 +408,53 @@ Test("B opens the bag on its own and closes it again", function()
     Eq(env.UIParent.shown, false, "UI shown")
 end)
 
+Test("without ContainerFrame_SetFullScreenFrame, B still opens the bag on its own", function()
+    local env = Load({ oldBags = true })
+    local bags = env.G.ContainerFrameCombinedBags
+    env.G.ToggleBackpack()
+    env.Tick()
+    Eq(bags.shown, true, "bag open")
+    Eq(env.OnStage("ContainerFrameCombinedBags"), true, "bag on the stage")
+    Eq(env.UIParent.shown, false, "UI shown")
+end)
+
+Test("B leaves the bag bar hidden with the UI", function()
+    local env = Load()
+    env.G.ToggleBackpack()
+    env.Tick()
+    Eq(env.G.BagsBar.parent, env.UIParent, "bag bar parent")
+    Eq(#env.visibility, 1, "UI shown or hidden after login")
+end)
+
+Test("a mailbox opens on its own with your bags, and closes them", function()
+    local env = Load()
+    local bags = env.G.ContainerFrameCombinedBags
+    env.OpenMailbox()
+    env.Tick()
+    env.Tick()
+    Eq(env.UIParent.shown, false, "UI shown")
+    Eq(env.mailClosed, nil, "mail closed")
+    Eq(env.OnStage("MailFrame"), true, "mail on the stage")
+    Eq(bags.shown, true, "bags open")
+    Eq(env.OnStage("ContainerFrameCombinedBags"), true, "bags on the stage")
+    env.G.MailFrame:Hide()
+    env.G.CloseAllBags(env.G.MailFrame)
+    env.Tick()
+    Eq(bags.shown, false, "bags open after closing the mail")
+    Eq(env.UIParent.shown, false, "UI shown after closing the mail")
+end)
+
+Test("/dui-solo off: a mailbox still opens on its own with your bags", function()
+    local env = Load()
+    env.Slash("DUISOLO", "off")
+    env.OpenMailbox()
+    env.Tick()
+    env.Tick()
+    Eq(env.mailClosed, nil, "mail closed")
+    Eq(env.UIParent.shown, false, "UI shown")
+    Eq(env.OnStage("ContainerFrameCombinedBags"), true, "bags on the stage")
+end)
+
 Test("chat sits on the stage, faded out unless typing", function()
     local env = Load()
     local box = env.G.ChatFrame1EditBox
@@ -526,6 +613,69 @@ Test("the minimap stays visible, unless /dui-minimap off", function()
     Eq(env.G.MinimapCluster.parent, env.UIParent, "cluster parent with the option off")
     env.Slash("DUIMINIMAP", "on")
     Eq(env.OnStage("MinimapCluster"), true, "cluster on the stage again")
+end)
+
+Test("a quest from an object shows on its own and stays open", function()
+    local env = Load()
+    env.G.ShowUIPanel(env.G.QuestFrame)
+    env.Tick()
+    env.Tick()
+    Eq(env.UIParent.shown, false, "UI shown")
+    Eq(env.questClosed, nil, "quest dialog closed")
+    Eq(env.OnStage("QuestFrame"), true, "quest window on the stage")
+    env.G.QuestFrame:Hide()
+    env.Tick()
+    Eq(env.G.QuestFrame.parent, env.UIParent, "quest window parent after closing")
+end)
+
+Test("/dui-solo off: a quest from an object still shows on its own", function()
+    local env = Load()
+    env.Slash("DUISOLO", "off")
+    env.G.ShowUIPanel(env.G.QuestFrame)
+    env.Tick()
+    env.Tick()
+    Eq(env.questClosed, nil, "quest dialog closed")
+    Eq(env.OnStage("QuestFrame"), true, "quest window on the stage")
+end)
+
+Test("a quest from an NPC you target keeps the UI", function()
+    local env = Load()
+    env.unit.exists = true
+    env.Fire("PLAYER_TARGET_CHANGED")
+    env.Tick()
+    env.G.ShowUIPanel(env.G.QuestFrame)
+    env.Tick()
+    Eq(env.UIParent.shown, true, "UI shown")
+    Eq(env.OnStage("QuestFrame"), false, "quest window on the stage")
+    env.unit.exists = false
+    env.Fire("PLAYER_TARGET_CHANGED")
+    env.Tick()
+    Eq(env.UIParent.shown, true, "UI shown with the quest window still open")
+end)
+
+Test("quick keybind mode keeps the UI without flickering", function()
+    local env = Load()
+    local settingsPanel, quick = env.G.SettingsPanel, env.G.QuickKeybindFrame
+    quick:HookScript("OnHide", function() settingsPanel:Show() end)
+    env.Slash("DUIOPTIONS")
+    settingsPanel:Show()
+    env.Tick()
+    Eq(env.UIParent.shown, true, "UI shown with the settings open")
+    settingsPanel:Hide()
+    quick:Show()
+    env.visibility = {}
+    for _ = 1, 5 do env.Tick() end
+    Eq(#env.visibility, 0, "UI shown or hidden while binding keys")
+    Eq(quick.shown, true, "quick keybind mode on")
+end)
+
+Test("the mail icon comes back with the minimap", function()
+    local env = Load()
+    local mail = env.G.MinimapCluster.IndicatorFrame.MailFrame
+    mail:Hide() -- UIParent hiding
+    Eq(mail.MailIcon.shown, false, "icon after hiding")
+    mail:Show() -- the minimap on the stage
+    Eq(mail.MailIcon.shown, true, "icon on the stage")
 end)
 
 Test("/dui-status runs", function()

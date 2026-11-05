@@ -32,7 +32,8 @@ local OPTIONS = {
     { key = "solo", command = "solo", label = "Map, loot window and bags on their own",
       help = "Out of combat, the world map, the loot window and your bags show with the rest of the UI still hidden. "
           .. "So does any window you open by clicking a minimap button. Esc closes them. Turn this off to have them bring the whole UI back. Other windows (character sheet, spellbook, "
-          .. "quests, vendors…) always bring the UI back." },
+          .. "quests, vendors…) always bring the UI back, except a quest, mailbox or book opened without a target: "
+          .. "those always show on their own, since bringing the UI back would close them." },
     { key = "minimap", command = "minimap", label = "Minimap always visible",
       help = "Keeps the minimap on screen while the rest of the UI is hidden. Turn this off to hide it with the UI." },
     { key = "arrow", command = "arrow", label = "Hide your arrow on the world map",
@@ -103,6 +104,19 @@ for _, name in ipairs(BAGS) do isBag[name] = true end
 -- Windows opened by a click on something shown with the UI hidden (a minimap
 -- button, say) also show on their own: frame -> name. Cleared when they close.
 local extra = {}
+-- Windows that end the conversation when they close: the quest window calls
+-- CloseQuest, and Blizzard closes every window as the UI comes back
+-- (Game.lua, CloseAllWindows), so reopening one shows it empty. Opened with
+-- the UI hidden (no target: a quest from an object, a mailbox, a book), they
+-- show on their own, whatever the solo switch says. talking: frame -> name,
+-- cleared when they close.
+local INTERACTIONS = {
+    "QuestFrame", "GossipFrame", "ItemTextFrame", "MailFrame", "MerchantFrame", "BankFrame",
+    "ClassTrainerFrame", "TaxiFrame", "TradeFrame", "AuctionHouseFrame", "PetitionFrame", "TabardFrame",
+}
+local isInteraction = {}
+for _, name in ipairs(INTERACTIONS) do isInteraction[name] = true end
+local talking = {}
 
 -- Always visible, even with the UI hidden: the cast bar (CastingBarFrame on
 -- older clients, PlayerCastingBarFrame on newer ones; the pet's too), the
@@ -121,7 +135,11 @@ local ALWAYS = {
 local MINIMAP = { "MinimapCluster", "Minimap" }
 
 local function Solo(name, frame)
-    return settings.solo and not inCombat and (isSolo[name] or (frame ~= nil and extra[frame] ~= nil))
+    if inCombat then return false end
+    if frame ~= nil and talking[frame] then return true end
+    -- The bags a mailbox or vendor opens too: the UI coming back would close it.
+    if isBag[name] and next(talking) then return true end
+    return settings.solo and (isSolo[name] or (frame ~= nil and extra[frame] ~= nil))
 end
 
 -- One stage per strata. SetParent hands the new parent's strata down to the
@@ -196,6 +214,9 @@ local function SyncStage()
         for frame, name in pairs(extra) do
             if frame:IsShown() and Solo(name, frame) then want[frame], solo[frame] = name, true end
         end
+        for frame, name in pairs(talking) do
+            if frame:IsShown() and Solo(name, frame) then want[frame], solo[frame] = name, true end
+        end
         -- Only the ones directly under UIParent: a mirror timer inside its
         -- container moves with it.
         local function Keep(names)
@@ -240,7 +261,10 @@ local WINDOWS = {
     "CommunitiesFrame", "CollectionsJournal", "ProfessionsFrame", "GameMenuFrame", "GossipFrame",
     "QuestFrame", "QuestLogFrame", "MerchantFrame", "ClassTrainerFrame", "TaxiFrame", "MailFrame", "BankFrame",
     "TradeFrame", "SettingsPanel", "AddonList", "AuctionHouseFrame", "MacroFrame", "PVEFrame", "PVPFrame",
-    "HelpFrame", "StaticPopup1",
+    "HelpFrame", "StaticPopup1", "ItemTextFrame", "PetitionFrame", "TabardFrame",
+    -- Shown without ShowUIPanel. Missed, the UI hides, its OnHide reopens
+    -- the settings, which bring the UI back, and round it goes.
+    "QuickKeybindFrame",
 }
 for _, name in ipairs(BAGS) do WINDOWS[#WINDOWS + 1] = name end
 
@@ -283,9 +307,35 @@ end
 
 local EvaluateNow
 
--- Bags refuse to open or close while the UI is hidden. Show it, run the bag
--- key, move open bags onto the stage and hide it again, all in one frame, so
--- the UI never appears.
+-- Bags open only while the frame they live in shows: UIParent, unless told
+-- otherwise (ContainerFrame_SetFullScreenFrame). Open them in the stage, then
+-- put them and the bag bar back where they were, all in one frame.
+local function OpenBagsOnStage(fn, arg)
+    local parents = {}
+    local function Note(frame)
+        if type(frame) == "table" and frame.GetParent then parents[frame] = frame:GetParent() end
+    end
+    Note(_G.BagsBar)
+    for _, name in ipairs(BAGS) do Note(_G[name]) end
+    ours = true
+    if Try("open your bags", ContainerFrame_SetFullScreenFrame, GetStage("MEDIUM")) then
+        Try("open your bags", fn, arg)
+        Try("open your bags", ContainerFrame_ClearFullScreenFrame)
+    end
+    ours = false
+    local Reparent = FrameUtil and FrameUtil.SetParentMaintainRenderLayering
+    for frame, parent in pairs(parents) do
+        -- A bag the key closed has left the stage already.
+        if frame:GetParent() ~= parent and not (isStage[parent] and not staged[frame]) then
+            Try("put your bags back", Reparent or frame.SetParent, frame, parent)
+        end
+    end
+end
+
+-- Bags refuse to open while the UI is hidden. Open them in the stage, or on
+-- clients without that, show the UI, run the bag key and hide it again, all
+-- in one frame, so the UI never appears. Showing the UI closes every other
+-- window, though, the mailbox included.
 local function BagAlone()
     local bag = pendingBag
     pendingBag = nil
@@ -298,13 +348,18 @@ local function BagAlone()
     end
     local fn = bag.fn
     if open and bag.name:find("^Toggle") and CloseAllBags then fn = CloseAllBags end
-    SetUI(true)
-    Try("open your bags", fn, bag.arg)
+    local inStage = ContainerFrame_SetFullScreenFrame and ContainerFrame_ClearFullScreenFrame
+    if inStage then
+        OpenBagsOnStage(fn, bag.arg)
+    else
+        SetUI(true)
+        Try("open your bags", fn, bag.arg)
+    end
     for _, name in ipairs(BAGS) do
         local frame = _G[name]
         if frame and frame:IsShown() then Stage(name, frame, true) end
     end
-    SetUI(false)
+    if not inStage then SetUI(false) end
 end
 
 local function ReopenPanel()
@@ -317,7 +372,7 @@ end
 
 EvaluateNow = function()
     if not loaded then return end
-    if pendingBag and settings.solo and not UIParent:IsShown() and not inCombat then BagAlone() end
+    if pendingBag and (settings.solo or next(talking)) and not UIParent:IsShown() and not inCombat then BagAlone() end
     local why = Wanted()
     if why and (uiOff or not UIParent:IsShown()) then
         SetUI(true)
@@ -364,8 +419,10 @@ local before
 -- A window shown while the UI is hidden is invisible: show the UI and reopen it.
 local function NoteHiddenPanel(name, frame)
     if clicking then extra[frame] = name end
-    if settings.hideUI and not UIParent:IsShown() and not ours and not inCombat and not Solo(name)
-        and not pendingPanel then
+    if not settings.hideUI or UIParent:IsShown() or ours or inCombat then return end
+    if isInteraction[name] then
+        talking[frame] = name
+    elseif not Solo(name) and not pendingPanel then
         pendingPanel = { name = name, frame = frame }
     end
 end
@@ -381,6 +438,7 @@ local function HookWindow(name, frame)
     frame:HookScript("OnHide", function()
         if staged[frame] then Unstage(frame) end
         extra[frame] = nil
+        talking[frame] = nil
         if name == "GameMenuFrame" then manual = false end
         Evaluate()
     end)
@@ -438,6 +496,18 @@ local function HookPanels()
             if frame:IsShown() then NoteHiddenPanel(name, frame) end
         end
         Evaluate()
+    end)
+end
+
+-- The minimap's new-mail icon hides whenever its frame does, the UI hiding
+-- included (MiniMapMailFrameMixin:OnHide), and Blizzard only shows it again
+-- with the next mail. Show it again with its frame.
+local function HookMail()
+    local indicator = MinimapCluster and MinimapCluster.IndicatorFrame
+    local mail = indicator and indicator.MailFrame
+    if not (mail and mail.MailIcon and HasNewMail) then return end
+    mail:HookScript("OnShow", function()
+        Try("show the mail icon", function() mail.MailIcon:SetShown(HasNewMail() and true or false) end)
     end)
 end
 
@@ -598,6 +668,7 @@ function EVENTS.PLAYER_LOGIN()
     HookChat()
     HookPanels()
     HookMap()
+    HookMail()
     UIParent:HookScript("OnShow", function()
         if ours or not settings.hideUI then return end
         -- Esc or Alt+Z with a window on its own closes the window.

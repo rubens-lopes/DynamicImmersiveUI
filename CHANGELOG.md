@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.3
+
+- Fixed: a quest from an object in the world (a table, a wanted poster…) opened empty. Quests, mailboxes and books you open without a target now show on their own, with the UI still hidden.
+- Fixed: mailboxes didn't open with the UI hidden. They now open on their own, with your bags.
+- Bags open without showing the UI for a moment, so they no longer close the map or other windows shown on their own.
+- Fixed: the new-mail icon on the minimap disappeared.
+- Fixed: Quick Keybind Mode flickered.
+
 ## v0.1.2
 
 - Your cast bar shows with the UI hidden (hearthstone, mounting, crafting…).

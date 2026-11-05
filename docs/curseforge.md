@@ -26,6 +26,7 @@ Dynamic Immersive UI is for players who want to see the world, not the interface
 - It comes back when combat starts, while you have a living target, or while a window is open (character sheet, spellbook, quests, vendors, the game menu…).
 - Being in a group doesn't bring it back; only combat does. A dead target doesn't either: only the loot window shows.
 - The world map, the loot window, your bags and windows opened from a minimap button show on their own, with the rest of the UI still hidden. Esc closes them.
+- So do quests from objects in the world, mailboxes and books: with no target to bring the UI back, they open on their own.
 - Chat works with the UI hidden: press Enter and type. It fades away 5 seconds after you're done.
 - The minimap, tooltips, the breath bar and the yellow quest progress text always show.
 - Your arrow on the world map is hidden.
