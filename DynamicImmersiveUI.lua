@@ -375,9 +375,9 @@ local function OpenBagsOnStage(fn, arg)
         -- Parents first, so a child set afterwards stays where it was put.
         Try("put your bags back", function()
             for _, layer in ipairs(layers[frame]) do
-                local f, parent, strata, level = layer[1], layer[2], layer[3], layer[4]
+                local f, was, strata, level = layer[1], layer[2], layer[3], layer[4]
                 -- Moved meanwhile (the search box goes to whichever bag opens first).
-                if f:GetParent() == parent then
+                if f:GetParent() == was then
                     if f:GetFrameStrata() ~= strata then f:SetFrameStrata(strata) end
                     if f:GetFrameLevel() ~= level then f:SetFrameLevel(level) end
                 end

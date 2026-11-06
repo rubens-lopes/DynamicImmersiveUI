@@ -189,9 +189,9 @@ local function Load(opts)
     end }
     -- The reagent bag, an individual bag, lives high up in a top-level
     -- container, above its slots.
-    local container = NewFrame("ContainerFrameContainer", UIParent, true)
-    container.level = 20
-    local reagents = NewFrame("ContainerFrame6", container, false)
+    local bagContainer = NewFrame("ContainerFrameContainer", UIParent, true)
+    bagContainer.level = 20
+    local reagents = NewFrame("ContainerFrame6", bagContainer, false)
     reagents.level = 21
     NewFrame("ContainerFrame6Item1", reagents, true).level = 22
     NewFrame("ContainerFrame6Bg", reagents, true).level = 0
