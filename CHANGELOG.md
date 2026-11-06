@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- New options panel, in the same style as the game's own: the switches are grouped under headings, hover one to see what it does, and Defaults puts them all back.
+- Quick menu: click the addons button on the minimap, then Dynamic Immersive UI, to turn switches on or off without bringing the UI back.
+
 ## v0.2.1
 
 - New option, off at first: action bars show when you move the mouse over them with the UI hidden, one bar at a time, and fade away after. Turn it on with `/dui-bars` or in the options panel. Bars moved with Edit Mode show where you put them.

@@ -5,8 +5,59 @@
 local ADDON_FILE = "DynamicImmersiveUI.lua"
 local ADDON_NAME = "DynamicImmersiveUI"
 
--- opts.saved   DynamicImmersiveUIDB as left by a previous session
--- opts.combat  in combat lockdown at login
+-- Loads Options.lua with Blizzard's settings page and menus stubbed. What it
+-- builds lands in env.options: the page's headings and checkboxes, the last
+-- quick menu, and the settings told to read their value again.
+local function LoadOptions(env)
+    local G = env.G
+    local ui = { headings = {}, checkboxes = {}, updates = {} }
+    env.options = ui
+    G.Settings = {
+        VarType = { Boolean = "boolean" },
+        RegisterVerticalLayoutCategory = function(name)
+            local layout = { AddInitializer = function(_, heading) table.insert(ui.headings, heading) end }
+            return { name = name, GetID = function() return 7 end }, layout
+        end,
+        RegisterProxySetting = function(_, variable, _, label, default, get, set)
+            local setting = { variable = variable, label = label, default = default }
+            function setting:GetValue() return get() end
+            function setting:SetValue(value) set(value) end
+            function setting:NotifyUpdate() table.insert(ui.updates, self.variable) end
+            return setting
+        end,
+        CreateCheckbox = function(_, setting, tooltip)
+            table.insert(ui.checkboxes, { setting = setting, tooltip = tooltip })
+        end,
+        RegisterAddOnCategory = function(category) ui.category = category end,
+        OpenToCategory = function(id) ui.opened = id end,
+    }
+    G.CreateSettingsListSectionHeaderInitializer = function(name) return name end
+    G.GameTooltip_SetTitle = function() end
+    G.GameTooltip_AddNormalLine = function() end
+    G.MenuUtil = { CreateContextMenu = function(owner, generator)
+        local menu = { items = {} }
+        local function Add(item)
+            table.insert(menu.items, item)
+            function item:SetTooltip(fn) self.tooltip = fn end
+            return item
+        end
+        function menu:CreateTitle(text) return Add({ kind = "title", text = text }) end
+        function menu:CreateCheckbox(text, isSelected, onSelect)
+            return Add({ kind = "checkbox", text = text, IsSelected = isSelected, Click = onSelect })
+        end
+        function menu:CreateDivider() return Add({ kind = "divider" }) end
+        function menu:CreateButton(text, onClick) return Add({ kind = "button", text = text, Click = onClick }) end
+        generator(owner, menu)
+        ui.menu = menu
+    end }
+    local chunk = assert(loadfile("Options.lua"))
+    setfenv(chunk, G)
+    chunk(ADDON_NAME, env.ns)
+end
+
+-- opts.saved    DynamicImmersiveUIDB as left by a previous session
+-- opts.combat   in combat lockdown at login
+-- opts.options  also load Options.lua
 local function Load(opts)
     opts = opts or {}
     local env = { time = 100, timers = {}, visibility = {}, calls = {}, lockdown = opts.combat or false }
@@ -305,6 +356,7 @@ local function Load(opts)
     env.ns = {}
     G.print = function(...) env.printed = table.concat({ ... }, " ") end
     chunk(ADDON_NAME, env.ns)
+    if opts.options then LoadOptions(env) end
     env.Fire("ADDON_LOADED", ADDON_NAME)
     env.Fire("PLAYER_LOGIN")
     env.Fire("PLAYER_ENTERING_WORLD")
@@ -880,6 +932,55 @@ Test("a click on an action bar doesn't make windows show on their own", function
     env.Tick()
     env.Tick()
     Eq(env.UIParent.shown, true, "UI shown")
+end)
+
+Test("the options page has a checkbox per switch, under its headings", function()
+    local env = Load({ options = true })
+    local ui = env.options
+    Eq(#ui.checkboxes, #env.ns.OPTIONS, "checkboxes")
+    Eq(table.concat(ui.headings, "|"), "Hiding the UI|Shown while the UI is hidden|World map", "headings")
+    local bars = ui.checkboxes[5]
+    Eq(bars.setting.label, "Action bars show on mouseover", "label")
+    Eq(bars.setting.default, false, "bars off by default")
+    Eq(bars.tooltip:find("/dui-bars", 1, true) ~= nil, true, "command in the tooltip")
+    Eq(ui.checkboxes[1].setting:GetValue(), true, "hide on")
+end)
+
+Test("a checkbox on the options page flips its switch", function()
+    local env = Load({ options = true })
+    env.options.checkboxes[1].setting:SetValue(false)
+    Eq(env.G.DynamicImmersiveUIDB.hideUI, false, "saved")
+    Eq(env.UIParent.shown, true, "UI shown")
+end)
+
+Test("a /dui- command refreshes the options page", function()
+    local env = Load({ options = true })
+    env.Slash("DUIBARS", "on")
+    Eq(env.options.updates[#env.options.updates], "DYNAMIC_IMMERSIVE_UI_BARS", "setting refreshed")
+end)
+
+Test("the minimap addon button opens a quick menu of the switches", function()
+    local env = Load({ options = true })
+    env.G.DynamicImmersiveUI_OnAddonCompartmentClick("DynamicImmersiveUI", "LeftButton")
+    env.Tick()
+    local menu = env.options.menu
+    Eq(menu.items[1].kind, "title", "title first")
+    local boxes = {}
+    for _, item in ipairs(menu.items) do
+        if item.kind == "checkbox" then
+            boxes[#boxes + 1] = item
+            item.tooltip(env.G.GameTooltip)
+        end
+    end
+    Eq(#boxes, #env.ns.OPTIONS, "checkboxes")
+    Eq(boxes[5].IsSelected(), false, "bars off")
+    boxes[5].Click()
+    Eq(boxes[5].IsSelected(), true, "bars on")
+    Eq(env.G.DynamicImmersiveUIDB.bars, true, "saved")
+    Eq(env.UIParent.shown, false, "UI still hidden")
+    menu.items[#menu.items].Click()
+    Eq(env.options.opened, 7, "options page opened")
+    Eq(env.UIParent.shown, true, "UI shown for the page")
 end)
 
 Test("/dui-status runs", function()

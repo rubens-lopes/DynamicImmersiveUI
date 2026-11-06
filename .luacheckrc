@@ -5,6 +5,9 @@ exclude_files = { ".release" }
 files["tests/"] = { self = false }
 
 globals = {
+    "DynamicImmersiveUI_OnAddonCompartmentClick",
+    "DynamicImmersiveUI_OnAddonCompartmentEnter",
+    "DynamicImmersiveUI_OnAddonCompartmentLeave",
     "DynamicImmersiveUIDB",
     "SLASH_DUIARROW1",
     "SLASH_DUIBARS1",
@@ -20,7 +23,13 @@ globals = {
 }
 
 read_globals = {
+    "AddonCompartmentFrame",
     "C_AddOns", "C_Timer",
+    "CreateSettingsListSectionHeaderInitializer",
+    "GameTooltip",
+    "GameTooltip_AddNormalLine",
+    "GameTooltip_SetTitle",
+    "MenuUtil",
     "CloseAllBags",
     "CloseLoot",
     "ContainerFrame_ClearFullScreenFrame",
@@ -34,8 +43,6 @@ read_globals = {
     "HideUIPanel",
     "hooksecurefunc",
     "InCombatLockdown",
-    "InterfaceOptions_AddCategory",
-    "InterfaceOptionsFrame_OpenToCategory",
     "issecretvalue",
     "UnitGUID",
     "MinimapCluster",

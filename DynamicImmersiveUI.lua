@@ -22,15 +22,15 @@ local TAG = "|cff33ccff" .. TITLE .. ":|r "
 local CHAT_LINGER = 5
 
 -- Every saved switch, in the order the options panel shows them. All start on
--- unless marked off = true.
+-- unless marked off = true. section starts a new heading on the panel.
 local OPTIONS = {
-    { key = "hideUI", command = "hide", label = "Hide the UI out of combat",
+    { key = "hideUI", command = "hide", section = "Hiding the UI", label = "Hide the UI out of combat",
       help = "Hides the whole UI, like Alt+Z, while you're out of combat. It comes back as soon as a fight starts. "
           .. "Esc brings it back until something changes; Esc again opens the game menu as usual." },
     { key = "target", command = "target", label = "A target brings the UI back",
       help = "Shows the UI while you have a living target, so you see its frame and your action bars. "
           .. "A dead target doesn't count: only the loot window shows." },
-    { key = "solo", command = "solo", label = "Map, loot window and bags on their own",
+    { key = "solo", command = "solo", section = "Shown while the UI is hidden", label = "Map, loot and bags alone",
       help = "Out of combat, the world map, the loot window and your bags show with the rest of the UI still hidden. "
           .. "So does any window you open by clicking a minimap button. Esc closes them. Turn this off to have them bring the whole UI back. Other windows (character sheet, spellbook, "
           .. "quests, vendors…) always bring the UI back, except a quest, mailbox or book opened without a target: "
@@ -40,10 +40,10 @@ local OPTIONS = {
     { key = "bars", command = "bars", off = true, label = "Action bars show on mouseover",
       help = "While the UI is hidden, an action bar shows when you move the mouse over where it sits, and fades "
           .. "away when you move it off. Only that bar shows; the rest of the UI stays hidden. Your key bindings work either way." },
-    { key = "messages", command = "messages", label = "Chat shows when someone talks to you",
+    { key = "messages", command = "messages", label = "Chat shows on new messages",
       help = "While the UI is hidden, chat shows when a whisper, party or guild message arrives, and fades away "
           .. "5 seconds later. Turn this off to see chat only while you type." },
-    { key = "arrow", command = "arrow", label = "Hide your arrow on the world map",
+    { key = "arrow", command = "arrow", section = "World map", label = "Hide your arrow on the map",
       help = "Hides the arrow that marks where you are on the world map, so you find your way like a traveller. "
           .. "Party and raid members still show." },
 }
@@ -906,6 +906,8 @@ function ns.Set(key, value)
     manual = false
     if key == "arrow" then Try("hide your map arrow", ApplyArrow) end
     EvaluateNow()
+    -- Options.lua: the panel shows the new value, whoever set it.
+    if ns.OnSet then Try("update the options panel", ns.OnSet, key) end
 end
 
 local function Help()
@@ -979,6 +981,7 @@ local function Options()
     if ns.OpenOptions then return ns.OpenOptions() end
     Say("the options panel isn't available on this client. Use /dui-help for the commands.")
 end
+ns.ShowOptions = Options
 
 SLASH_DUIHELP1 = "/dui-help"
 SlashCmdList.DUIHELP = Help

@@ -6,6 +6,9 @@
 ## Category: Miscellaneous
 ## IconTexture: Interface\Icons\INV_Misc_Spyglass_02
 ## SavedVariables: DynamicImmersiveUIDB
+## AddonCompartmentFunc: DynamicImmersiveUI_OnAddonCompartmentClick
+## AddonCompartmentFuncOnEnter: DynamicImmersiveUI_OnAddonCompartmentEnter
+## AddonCompartmentFuncOnLeave: DynamicImmersiveUI_OnAddonCompartmentLeave
 
 DynamicImmersiveUI.lua
 Options.lua

@@ -11,6 +11,9 @@ Paste these into the project form at https://authors.curseforge.com/#/projects/c
 - **Logo:** `media/logo.png`
 - **Source:** https://github.com/rubens-lopes/DynamicImmersiveUI
 - **Issues:** https://github.com/rubens-lopes/DynamicImmersiveUI/issues
+- **Images** (Images tab): `antes-depois.jpg`, `antes-com-ui.jpg`, `depois-sem-ui.jpg`, and the GIFs below
+
+The images and clips live outside the repo, in `Videos/DUI` on the Windows machine (`clipes/`, `fotos/`). Upload them in the project's Images tab, then replace each `IMAGE:` placeholder below with the image's CurseForge URL.
 
 ## Summary
 
@@ -19,6 +22,8 @@ The UI hides like Alt+Z and comes back only for combat, a target or a window. Ma
 ## Description
 
 Dynamic Immersive UI is for players who want to see the world, not the interface. For World of Warcraft: Forever. A companion to Dynamic Display Nameplate.
+
+![The same moment with the UI and without it](IMAGE:antes-depois.jpg)
 
 **How it works**
 
@@ -33,17 +38,43 @@ Dynamic Immersive UI is for players who want to see the world, not the interface
 - Optionally, your action bars show when you move the mouse over them.
 - Esc brings the UI back until something changes; Esc again opens the game menu.
 
+**See it in game**
+
+A fight brings the UI back, and it hides again once the fight is over (the fight is sped up):
+
+![Combat](IMAGE:1-combate.gif)
+
+Loot shows on its own:
+
+![Loot](IMAGE:2-loot.gif)
+
+So does the world map, without your arrow:
+
+![World map](IMAGE:3-mapa.gif)
+
+And your bags:
+
+![Bags](IMAGE:4-bolsa.gif)
+
+Other windows, like the character sheet, bring the whole UI back:
+
+![Character sheet](IMAGE:5-ficha.gif)
+
+Optionally, an action bar shows when you move the mouse over it:
+
+![Action bars](IMAGE:6-barras.gif)
+
 **Options**
 
-Every switch is in the options panel: type `/dui-options`, or Esc > Options > AddOns > Dynamic Immersive UI. All start on, except the action bars on mouseover.
+Every switch is in the options panel: type `/dui-options`, or Esc > Options > AddOns > Dynamic Immersive UI. Hover a switch to see what it does. For a quick change, click the addons button on the minimap, then Dynamic Immersive UI: its switches show in a small menu, without bringing the UI back. All start on, except the action bars on mouseover.
 
 - **Hide the UI out of combat**
 - **A target brings the UI back**
-- **Map, loot window and bags on their own** (and windows opened from a minimap button)
+- **Map, loot and bags alone** (and windows opened from a minimap button)
 - **Minimap always visible**
 - **Action bars show on mouseover** (off at first)
-- **Chat shows when someone talks to you**
-- **Hide your arrow on the world map**
+- **Chat shows on new messages**
+- **Hide your arrow on the map**
 
 **Commands**
 

@@ -18,15 +18,15 @@ Press Esc to bring the UI back until something changes (a target, a fight, a win
 
 ## Options
 
-Open the panel with `/dui-options`, or Esc > Options > AddOns > Dynamic Immersive UI. Every switch starts on, except the action bars on mouseover.
+Open the panel with `/dui-options`, or Esc > Options > AddOns > Dynamic Immersive UI; hover a switch to see what it does. For a quick change, click the addons button on the minimap, then Dynamic Immersive UI: its switches show in a small menu, without bringing the UI back. Every switch starts on, except the action bars on mouseover.
 
 - **Hide the UI out of combat**: the main switch. Off, the addon leaves the UI alone.
 - **A target brings the UI back**: shows the UI while you have a living target.
-- **Map, loot window and bags on their own**: also windows opened from a minimap button. Off, these bring the whole UI back like any other window.
+- **Map, loot and bags alone**: also windows opened from a minimap button. Off, these bring the whole UI back like any other window.
 - **Minimap always visible**: keeps the minimap on screen while the rest of the UI is hidden.
 - **Action bars show on mouseover** (off at first): a bar shows while the mouse is over it, only that bar. Bars you moved with Edit Mode show where you put them.
-- **Chat shows when someone talks to you**: a whisper, party or guild message shows chat for 5 seconds.
-- **Hide your arrow on the world map**: party and raid members still show.
+- **Chat shows on new messages**: a whisper, party or guild message shows chat for 5 seconds.
+- **Hide your arrow on the map**: party and raid members still show.
 
 ## Commands
 
