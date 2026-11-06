@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.3.0
 
 - New options panel, in the same style as the game's own: the switches are grouped under headings, hover one to see what it does, and Defaults puts them all back.
 - Quick menu: click the addons button on the minimap, then Dynamic Immersive UI, to turn switches on or off without bringing the UI back.
