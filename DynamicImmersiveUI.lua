@@ -667,12 +667,16 @@ end
 
 -- Clicks on the stage: the minimap and its addon buttons, bags, the map, chat.
 -- Not the action bars: a click there casts, and a window it opens is like
--- one opened with a key.
+-- one opened with a key. Dropdown menus (the addon compartment's) have no
+-- parent at all; a click on one counts too, but not one on the world.
 local function OnStage(region)
     while region do
+        if region.IsForbidden and region:IsForbidden() then return false end
         if isStage[region] then return true end
         if staged[region] and staged[region].layers then return false end
-        region = region.GetParent and region:GetParent()
+        local parent = region.GetParent and region:GetParent()
+        if not parent then return region ~= WorldFrame and region ~= UIParent end
+        region = parent
     end
     return false
 end
