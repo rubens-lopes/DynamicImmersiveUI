@@ -85,6 +85,7 @@ local function Load(opts)
         function f:SetScale() end
         function f:GetScale() return 1 end
         function f:HasFocus() return self.focus == true end
+        function f:IsMouseOver() return env.hover == self end
         frames[#frames + 1] = f
         if name then G[name] = f end
         return f
@@ -138,6 +139,13 @@ local function Load(opts)
     itemRef.strata = "TOOLTIP"
     function itemRef:SetOwner(owner) self.owner = owner end
     NewFrame("UIErrorsFrame", UIParent, true)
+    -- Action bars, high above UIParent like MainActionBar's frameLevel 50.
+    local bar = NewFrame("MainActionBar", UIParent, true)
+    bar.level = 50
+    NewFrame("ActionButton1", bar, true).level = 51
+    NewFrame("MultiBarBottomLeft", UIParent, true)
+    -- One another addon took over.
+    NewFrame("MultiBarRight", NewFrame("MoverFrame", UIParent, true), true)
     local cluster = NewFrame("MinimapCluster", UIParent, true)
     NewFrame("Minimap", cluster, true)
     local container = NewFrame("MirrorTimerContainer", UIParent, true)
@@ -278,6 +286,12 @@ local function Load(opts)
                     break
                 end
             end
+        end
+    end
+    -- Runs every shown frame's OnUpdate.
+    function env.Update(elapsed)
+        for _, f in ipairs(frames) do
+            if f.shown and f.scripts.OnUpdate then f.scripts.OnUpdate(f, elapsed) end
         end
     end
     function env.Slash(name, arg) G.SlashCmdList[name](arg) end
@@ -807,6 +821,65 @@ Test("the mail icon comes back with the minimap", function()
     Eq(mail.MailIcon.shown, false, "icon after hiding")
     mail:Show() -- the minimap on the stage
     Eq(mail.MailIcon.shown, true, "icon on the stage")
+end)
+
+Test("action bars stay hidden by default", function()
+    local env = Load()
+    Eq(env.OnStage("MainActionBar"), false, "bar on the stage")
+end)
+
+Test("/dui-bars: a bar fades in under the mouse and out after", function()
+    local env = Load()
+    local bar = env.G.MainActionBar
+    env.Slash("DUIBARS", "on")
+    Eq(env.OnStage("MainActionBar"), true, "bar on the stage")
+    Eq(env.OnStage("MultiBarBottomLeft"), true, "second bar on the stage")
+    Eq(env.OnStage("MultiBarRight"), false, "bar another addon took over")
+    Eq(bar.alpha, 0, "alpha without the mouse")
+    env.hover = bar
+    env.Update(0.1)
+    env.Update(0.1)
+    Eq(bar.alpha, 1, "alpha under the mouse")
+    Eq(env.G.MultiBarBottomLeft.alpha, 0, "the other bar's alpha")
+    env.Tick() -- an evaluation leaves it shown
+    Eq(bar.alpha, 1, "alpha after an evaluation")
+    env.hover = nil
+    env.Update(0.25)
+    Eq(bar.alpha, 0.5, "alpha fading out")
+    env.Update(0.25)
+    Eq(bar.alpha, 0, "alpha after fading out")
+end)
+
+Test("/dui-bars: bars go back in place for combat", function()
+    local env = Load()
+    local bar = env.G.MainActionBar
+    env.Slash("DUIBARS", "on")
+    env.Fire("PLAYER_REGEN_DISABLED")
+    Eq(env.UIParent.shown, true, "UI shown")
+    Eq(bar.parent, env.UIParent, "bar parent")
+    Eq(bar.alpha, 1, "bar alpha")
+    Eq(bar.level, 50, "bar level")
+    Eq(env.G.ActionButton1.level, 51, "button level")
+end)
+
+Test("/dui-bars off puts the bars back", function()
+    local env = Load()
+    env.Slash("DUIBARS", "on")
+    env.Slash("DUIBARS", "off")
+    Eq(env.G.MainActionBar.parent, env.UIParent, "bar parent")
+    Eq(env.G.MainActionBar.alpha, 1, "bar alpha")
+end)
+
+Test("a click on an action bar doesn't make windows show on their own", function()
+    local env = Load()
+    env.Slash("DUIBARS", "on")
+    env.mouse = env.G.ActionButton1
+    env.Fire("GLOBAL_MOUSE_DOWN")
+    env.G.ShowUIPanel(env.G.CharacterFrame)
+    env.Fire("GLOBAL_MOUSE_UP")
+    env.Tick()
+    env.Tick()
+    Eq(env.UIParent.shown, true, "UI shown")
 end)
 
 Test("/dui-status runs", function()

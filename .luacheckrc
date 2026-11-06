@@ -7,6 +7,7 @@ files["tests/"] = { self = false }
 globals = {
     "DynamicImmersiveUIDB",
     "SLASH_DUIARROW1",
+    "SLASH_DUIBARS1",
     "SLASH_DUIHELP1",
     "SLASH_DUIHIDE1",
     "SLASH_DUIMINIMAP1",

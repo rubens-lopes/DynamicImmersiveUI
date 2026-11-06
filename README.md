@@ -12,16 +12,19 @@ Out of combat, the world map, the loot window, your bags and any window you open
 
 Your arrow on the world map is hidden, so you find your way from the landmarks.
 
+If you want your action bars at hand, turn on `/dui-bars`: a bar then shows when you move the mouse over where it sits, and fades away when you move it off. Your key bindings work either way.
+
 Press Esc to bring the UI back until something changes (a target, a fight, a window); Esc again opens the game menu as usual.
 
 ## Options
 
-Open the panel with `/dui-options`, or Esc > Options > AddOns > Dynamic Immersive UI. Every switch starts on.
+Open the panel with `/dui-options`, or Esc > Options > AddOns > Dynamic Immersive UI. Every switch starts on, except the action bars on mouseover.
 
 - **Hide the UI out of combat**: the main switch. Off, the addon leaves the UI alone.
 - **A target brings the UI back**: shows the UI while you have a living target.
 - **Map, loot window and bags on their own**: also windows opened from a minimap button. Off, these bring the whole UI back like any other window.
 - **Minimap always visible**: keeps the minimap on screen while the rest of the UI is hidden.
+- **Action bars show on mouseover** (off at first): a bar shows while the mouse is over it, only that bar. Bars you moved with Edit Mode show where you put them.
 - **Chat shows when someone talks to you**: a whisper, party or guild message shows chat for 5 seconds.
 - **Hide your arrow on the world map**: party and raid members still show.
 
@@ -29,7 +32,7 @@ Open the panel with `/dui-options`, or Esc > Options > AddOns > Dynamic Immersiv
 
 - `/dui-help` lists the commands.
 - `/dui-options` opens the options panel.
-- `/dui-hide`, `/dui-target`, `/dui-solo`, `/dui-minimap`, `/dui-messages` and `/dui-arrow` take `on` or `off`; with no argument they toggle.
+- `/dui-hide`, `/dui-target`, `/dui-solo`, `/dui-minimap`, `/dui-bars`, `/dui-messages` and `/dui-arrow` take `on` or `off`; with no argument they toggle.
 - `/dui-status` shows what the addon sees. Its output is also saved in the addon's saved variables; include it in bug reports.
 
 Settings are saved per account.

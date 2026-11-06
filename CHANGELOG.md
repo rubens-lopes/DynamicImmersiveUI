@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- New option, off at first: action bars show when you move the mouse over them with the UI hidden, one bar at a time, and fade away after. Turn it on with `/dui-bars` or in the options panel. Bars moved with Edit Mode show where you put them.
+
 ## v0.2.0
 
 - Chat shows for 5 seconds when a whisper, party or guild message arrives while the UI is hidden. Switch it off with `/dui-messages off` or in the options panel.

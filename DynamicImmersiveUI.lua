@@ -2,7 +2,8 @@
 -- living target or have a window open. Out of combat the map, the loot
 -- window and bags show on their own, and chat works with the UI hidden. The
 -- cast bar, breath bar, tooltips and quest progress text always show.
--- Optionally hides your arrow on the world map.
+-- Optionally, action bars show on mouseover, and your arrow on the world map
+-- is hidden.
 --
 -- How it works, found with a probe on WoW Forever:
 -- - SetUIVisibility works from an addon out of combat, and
@@ -36,6 +37,9 @@ local OPTIONS = {
           .. "those always show on their own, since bringing the UI back would close them." },
     { key = "minimap", command = "minimap", label = "Minimap always visible",
       help = "Keeps the minimap on screen while the rest of the UI is hidden. Turn this off to hide it with the UI." },
+    { key = "bars", command = "bars", off = true, label = "Action bars show on mouseover",
+      help = "While the UI is hidden, an action bar shows when you move the mouse over where it sits, and fades "
+          .. "away when you move it off. Only that bar shows; the rest of the UI stays hidden. Your key bindings work either way." },
     { key = "messages", command = "messages", label = "Chat shows when someone talks to you",
       help = "While the UI is hidden, chat shows when a whisper, party or guild message arrives, and fades away "
           .. "5 seconds later. Turn this off to see chat only while you type." },
@@ -159,6 +163,24 @@ local ALWAYS = {
 -- minimap; Minimap itself counts only if something moved it out.
 local MINIMAP = { "MinimapCluster", "Minimap" }
 
+-- With the bars option on, also on the stage, faded out unless the mouse is
+-- over them. Only the ones directly under UIParent, where Edit Mode keeps
+-- them; a bar another addon took over stays hidden with the UI.
+local BARS = {
+    "MainActionBar", "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarRight", "MultiBarLeft",
+    "MultiBar5", "MultiBar6", "MultiBar7", "StanceBar", "PetActionBar", "PossessActionBar",
+    "MultiCastActionBarFrame",
+}
+local isBar = {}
+for _, name in ipairs(BARS) do isBar[name] = true end
+-- Seconds a bar takes to fade in and out, and how many pixels around it the
+-- mouse still counts as over it.
+local BAR_FADE_IN = 0.15
+local BAR_FADE_OUT = 0.5
+local BAR_MARGIN = 8
+-- bar -> alpha while it's on the stage.
+local barAlpha = {}
+
 local function Solo(name, frame)
     if inCombat then return false end
     if frame ~= nil and talking[frame] then return true end
@@ -194,8 +216,30 @@ local function GetStage(strata)
     return stage
 end
 
--- frame -> { name, parent, alpha, strata, solo } while it sits on a stage.
--- solo: a window that Esc closes.
+-- Notes the parent, strata and level of a frame and everything in it, so
+-- RestoreLayers can put them back after a move: { { frame, parent, strata, level }, … }.
+local function NoteLayers(frame, list)
+    list[#list + 1] = { frame, frame:GetParent(), frame:GetFrameStrata(), frame:GetFrameLevel() }
+    for _, child in ipairs({ frame:GetChildren() }) do NoteLayers(child, list) end
+    return list
+end
+
+-- Parents first, so a child set afterwards stays where it was put.
+local function RestoreLayers(list)
+    for _, layer in ipairs(list) do
+        local f, was, strata, level = layer[1], layer[2], layer[3], layer[4]
+        -- Moved meanwhile (the search box goes to whichever bag opens first).
+        if f:GetParent() == was then
+            if f:GetFrameStrata() ~= strata then f:SetFrameStrata(strata) end
+            if f:GetFrameLevel() ~= level then f:SetFrameLevel(level) end
+        end
+    end
+end
+
+-- frame -> { name, parent, alpha, strata, solo, layers } while it sits on a
+-- stage. solo: a window that Esc closes. layers: an action bar's levels, put
+-- back with it; back under UIParent it would otherwise sit lower than the
+-- frames around it.
 local staged = {}
 
 local function Stage(name, frame, solo)
@@ -203,6 +247,9 @@ local function Stage(name, frame, solo)
     if frame:IsProtected() and InCombatLockdown() then return end
     local saved = { name = name, parent = frame:GetParent(), alpha = frame:GetAlpha(),
         strata = frame:GetFrameStrata(), solo = solo }
+    if isBar[name] and not Try("show " .. name .. " on mouseover", function()
+        saved.layers = NoteLayers(frame, {})
+    end) then return end
     if Try("show " .. name .. " on its own", frame.SetParent, frame, GetStage(saved.strata)) then
         staged[frame] = saved
         if solo then NudgeMoveAny() end
@@ -214,14 +261,42 @@ local function Unstage(frame)
     if not saved then return end
     if frame:IsProtected() and InCombatLockdown() then return end
     staged[frame] = nil
+    barAlpha[frame] = nil
     Try("put " .. saved.name .. " back", function()
         frame:SetParent(saved.parent)
         -- Only frames that had a strata of their own, like tooltips: a bag
         -- is already right, and setting it would cover its buttons.
         if frame:GetFrameStrata() ~= saved.strata then frame:SetFrameStrata(saved.strata) end
+        if saved.layers then RestoreLayers(saved.layers) end
         frame:SetAlpha(saved.alpha)
     end)
 end
+
+-- Fades the bars on the stage in while the mouse is over them, and out after.
+-- Runs only while a bar is on the stage.
+local barFader = CreateFrame("Frame")
+barFader:Hide()
+barFader:SetScript("OnUpdate", function(self, elapsed)
+    local any = false
+    for frame, saved in pairs(staged) do
+        if saved.layers then
+            any = true
+            local over = inCombat or UIParent:IsShown()
+                or (frame:IsShown() and frame:IsMouseOver(BAR_MARGIN, -BAR_MARGIN, -BAR_MARGIN, BAR_MARGIN))
+            local alpha = barAlpha[frame] or 0
+            if over then
+                alpha = math.min(1, alpha + elapsed / BAR_FADE_IN)
+            else
+                alpha = math.max(0, alpha - elapsed / BAR_FADE_OUT)
+            end
+            if alpha ~= barAlpha[frame] then
+                barAlpha[frame] = alpha
+                frame:SetAlpha(alpha)
+            end
+        end
+    end
+    if not any then self:Hide() end
+end)
 
 local function ChatActive()
     if chatBox and chatBox:HasFocus() then return true end
@@ -262,6 +337,7 @@ local function SyncStage()
         end
         Keep(ALWAYS)
         if settings.minimap then Keep(MINIMAP) end
+        if settings.bars then Keep(BARS) end
         for i = 1, NUM_CHAT_WINDOWS or 10 do
             for _, name in ipairs({ "ChatFrame" .. i, "ChatFrame" .. i .. "EditBox" }) do
                 local frame = _G[name]
@@ -280,6 +356,19 @@ local function SyncStage()
     end
     for frame in pairs(staged) do
         if not want[frame] then Unstage(frame) end
+    end
+    for frame, saved in pairs(staged) do
+        if saved.layers then
+            if hidden then
+                frame:SetAlpha(barAlpha[frame] or 0)
+                barFader:Show()
+            else
+                -- Still on the stage because combat locked it there: never
+                -- leave a bar invisible in a fight.
+                barAlpha[frame] = 1
+                frame:SetAlpha(1)
+            end
+        end
     end
 end
 
@@ -348,18 +437,12 @@ local EvaluateNow
 -- them: under the bag, which then covers them in grey. So note the strata
 -- and level of every frame in them first, and set them all back after.
 local function OpenBagsOnStage(fn, arg)
-    -- frame -> parent; frame -> { { frame, parent, strata, level }, … } for it and
-    -- everything in it.
+    -- frame -> parent; frame -> its layers (NoteLayers).
     local parents = {}
     local layers = {}
-    local function NoteLayers(frame, list)
-        list[#list + 1] = { frame, frame:GetParent(), frame:GetFrameStrata(), frame:GetFrameLevel() }
-        for _, child in ipairs({ frame:GetChildren() }) do NoteLayers(child, list) end
-    end
     local function Note(frame)
         parents[frame] = frame:GetParent()
-        layers[frame] = {}
-        NoteLayers(frame, layers[frame])
+        layers[frame] = NoteLayers(frame, {})
     end
     for _, name in ipairs({ "BagsBar", unpack(BAGS) }) do
         local frame = _G[name]
@@ -380,17 +463,7 @@ local function OpenBagsOnStage(fn, arg)
         if frame:GetParent() ~= parent then
             Try("put your bags back", Reparent or frame.SetParent, frame, parent)
         end
-        -- Parents first, so a child set afterwards stays where it was put.
-        Try("put your bags back", function()
-            for _, layer in ipairs(layers[frame]) do
-                local f, was, strata, level = layer[1], layer[2], layer[3], layer[4]
-                -- Moved meanwhile (the search box goes to whichever bag opens first).
-                if f:GetParent() == was then
-                    if f:GetFrameStrata() ~= strata then f:SetFrameStrata(strata) end
-                    if f:GetFrameLevel() ~= level then f:SetFrameLevel(level) end
-                end
-            end
-        end)
+        Try("put your bags back", RestoreLayers, layers[frame])
     end
 end
 
@@ -593,9 +666,12 @@ local function HookMail()
 end
 
 -- Clicks on the stage: the minimap and its addon buttons, bags, the map, chat.
+-- Not the action bars: a click there casts, and a window it opens is like
+-- one opened with a key.
 local function OnStage(region)
     while region do
         if isStage[region] then return true end
+        if staged[region] and staged[region].layers then return false end
         region = region.GetParent and region:GetParent()
     end
     return false
@@ -916,6 +992,8 @@ SLASH_DUISOLO1 = "/dui-solo"
 SlashCmdList.DUISOLO = MakeToggle("solo")
 SLASH_DUIMINIMAP1 = "/dui-minimap"
 SlashCmdList.DUIMINIMAP = MakeToggle("minimap")
+SLASH_DUIBARS1 = "/dui-bars"
+SlashCmdList.DUIBARS = MakeToggle("bars")
 SLASH_DUIMESSAGES1 = "/dui-messages"
 SlashCmdList.DUIMESSAGES = MakeToggle("messages")
 SLASH_DUIARROW1 = "/dui-arrow"
