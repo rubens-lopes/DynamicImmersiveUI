@@ -2,8 +2,8 @@
 -- living target or have a window open. Out of combat the map, the loot
 -- window and bags show on their own, and chat works with the UI hidden. The
 -- cast bar, breath bar, tooltips and quest progress text always show.
--- Optionally, action bars show on mouseover, and your arrow on the world map
--- is hidden.
+-- Optionally, action bars show on mouseover, and your arrow (and your
+-- group) on the world map is hidden.
 --
 -- How it works, found with a probe on WoW Forever:
 -- - SetUIVisibility works from an addon out of combat, and
@@ -41,11 +41,13 @@ local OPTIONS = {
       help = "While the UI is hidden, an action bar shows when you move the mouse over where it sits, and fades "
           .. "away when you move it off. Only that bar shows; the rest of the UI stays hidden. Your key bindings work either way." },
     { key = "messages", command = "messages", label = "Chat shows on new messages",
-      help = "While the UI is hidden, chat shows when a whisper, party or guild message arrives, and fades away "
+      help = "While the UI is hidden, chat shows when a whisper, party or guild message or a ping arrives, yours too, and fades away "
           .. "5 seconds later. Turn this off to see chat only while you type." },
     { key = "arrow", command = "arrow", section = "World map", label = "Hide your arrow on the map",
       help = "Hides the arrow that marks where you are on the world map, so you find your way like a traveller. "
-          .. "Party and raid members still show." },
+          .. "Party and raid members still show, unless you hide them too." },
+    { key = "group", command = "group", off = true, label = "Hide your group on the map",
+      help = "Hides the dots that mark your party and raid members on the world map." },
 }
 
 -- Replaced by the saved table on ADDON_LOADED.
@@ -325,6 +327,19 @@ end
 -- be there before Enter is pressed: moving an edit box and focusing it
 -- yourself breaks sending (ChatFrameEditBox.lua).
 
+-- World pings: the game draws each in a PingPin, a protected frame (not a
+-- forbidden one) under UIParent, and reuses it for later pings. Found when a
+-- ping arrives.
+local pings = {}
+local function FindPings()
+    for _, child in ipairs({ UIParent:GetChildren() }) do
+        if not (child.IsForbidden and child:IsForbidden()) and child.GetObjectType
+            and child:GetObjectType() == "PingPin" then
+            pings[child] = true
+        end
+    end
+end
+
 local function SyncStage()
     local hidden = not UIParent:IsShown()
     local want = {}
@@ -352,6 +367,11 @@ local function SyncStage()
             end
         end
         Keep(ALWAYS)
+        for pin in pairs(pings) do
+            -- The game took it back: put it on the stage again.
+            if staged[pin] and pin:GetParent() == UIParent then staged[pin] = nil end
+            if staged[pin] or pin:GetParent() == UIParent then want[pin] = "ping" end
+        end
         if settings.minimap then Keep(MINIMAP) end
         if settings.bars then Keep(BARS) end
         for i = 1, NUM_CHAT_WINDOWS or 10 do
@@ -808,21 +828,30 @@ end
 -- World map arrow
 ---------------------------------------------------------------------------
 
--- Your arrow is a pin from this pool (a UnitPositionFrame).
+-- Your arrow and your group's dots are one pin from this pool (a
+-- UnitPositionFrame). Its data provider shows each kind of unit at a size,
+-- and hides the ones at 0 (GroupMembersDataProvider.lua): unit -> switch.
 local ARROW_TEMPLATE = "GroupMembersPinTemplate"
-local arrowHidden = setmetatable({}, { __mode = "k" })
+local MAP_UNITS = { player = "arrow", party = "group", raid = "group" }
+-- unit -> Blizzard's size, noted before we change any.
+local pinSizes
 
 local function ApplyArrow()
     local map = WorldMapFrame
     local pool = map and map.pinPools and map.pinPools[ARROW_TEMPLATE]
     if not (pool and pool.EnumerateActive) then return end
     for pin in pool:EnumerateActive() do
-        if settings.arrow then
-            pin:SetAlpha(0)
-            arrowHidden[pin] = true
-        elseif arrowHidden[pin] then
-            pin:SetAlpha(1)
-            arrowHidden[pin] = nil
+        local provider = pin.dataProvider
+        if provider and provider.SetUnitPinSize and provider.EnumerateUnitPinSizes then
+            if not pinSizes then
+                pinSizes = {}
+                for unit, size in provider:EnumerateUnitPinSizes() do pinSizes[unit] = size end
+            end
+            for unit, key in pairs(MAP_UNITS) do
+                if pinSizes[unit] then provider:SetUnitPinSize(unit, settings[key] and 0 or pinSizes[unit]) end
+            end
+            -- Units shown again keep the size they had before the map was zoomed.
+            if pin.SynchronizePinSizes then pin:SynchronizePinSizes() end
         end
     end
 end
@@ -893,20 +922,36 @@ function EVENTS.PLAYER_REGEN_ENABLED()
 end
 
 -- Messages meant for you: chat shows for a moment. Not your own, which you
--- just typed. The sender can be a secret value; then it counts.
+-- just typed. The sender can be a secret value; then it counts. Pings count
+-- even when they are yours: chat says what was pinged.
 local MESSAGES = {
     "CHAT_MSG_WHISPER", "CHAT_MSG_BN_WHISPER", "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER",
-    "CHAT_MSG_GUILD", "CHAT_MSG_OFFICER",
+    "CHAT_MSG_GUILD", "CHAT_MSG_OFFICER", "CHAT_MSG_PING",
 }
-local function OnMessage(...)
+local function OnMessage(event, ...)
     if not settings.messages then return end
     local guid = select(12, ...)
-    if guid ~= nil and not (issecretvalue and issecretvalue(guid)) and guid == UnitGUID("player") then return end
+    if event ~= "CHAT_MSG_PING" and guid ~= nil and not (issecretvalue and issecretvalue(guid))
+        and guid == UnitGUID("player") then return end
     chatUntil = math.max(chatUntil, GetTime() + CHAT_LINGER)
     Evaluate()
     C_Timer.After(CHAT_LINGER + 0.1, Evaluate)
 end
-for _, event in ipairs(MESSAGES) do EVENTS[event] = OnMessage end
+for _, event in ipairs(MESSAGES) do
+    EVENTS[event] = function(...) OnMessage(event, ...) end
+end
+
+-- A ping shows in the world with the UI hidden. Its pin may be made just
+-- after the message: look again a frame later.
+function EVENTS.CHAT_MSG_PING(...)
+    OnMessage("CHAT_MSG_PING", ...)
+    FindPings()
+    Evaluate()
+    C_Timer.After(0, function()
+        FindPings()
+        Evaluate()
+    end)
+end
 
 function EVENTS.PLAYER_TARGET_CHANGED()
     manual = false
@@ -942,7 +987,7 @@ function ns.Get(key) return settings[key] end
 function ns.Set(key, value)
     settings[key] = value
     manual = false
-    if key == "arrow" then Try("hide your map arrow", ApplyArrow) end
+    if key == "arrow" or key == "group" then Try("hide your map arrow", ApplyArrow) end
     EvaluateNow()
     -- Options.lua: the panel shows the new value, whoever set it.
     if ns.OnSet then Try("update the options panel", ns.OnSet, key) end
@@ -1039,5 +1084,7 @@ SLASH_DUIMESSAGES1 = "/dui-messages"
 SlashCmdList.DUIMESSAGES = MakeToggle("messages")
 SLASH_DUIARROW1 = "/dui-arrow"
 SlashCmdList.DUIARROW = MakeToggle("arrow")
+SLASH_DUIGROUP1 = "/dui-group"
+SlashCmdList.DUIGROUP = MakeToggle("group")
 SLASH_DUISTATUS1 = "/dui-status"
 SlashCmdList.DUISTATUS = Status

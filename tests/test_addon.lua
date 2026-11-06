@@ -167,8 +167,12 @@ local function Load(opts)
     -- Windows. The panel manager closes the character sheet when the UI
     -- comes back, like UIParentPanelManager's SetUIPanel.
     local map = NewFrame("WorldMapFrame", UIParent, false)
-    env.arrow = { alpha = 1 }
-    function env.arrow:SetAlpha(a) self.alpha = a end
+    -- One pin draws you and your group; its data provider hides units at size 0.
+    env.pinSizes = { player = 27, party = 11, raid = 8.25 }
+    env.arrow = { dataProvider = {} }
+    function env.arrow.dataProvider:EnumerateUnitPinSizes() return next, env.pinSizes end
+    function env.arrow.dataProvider:SetUnitPinSize(unit, size) env.pinSizes[unit] = size end
+    function env.arrow:SynchronizePinSizes() end
     map.pinPools = { GroupMembersPinTemplate = { EnumerateActive = function()
         local done = false
         return function()
@@ -500,7 +504,9 @@ Test("the map shows on its own, with the arrow hidden", function()
     env.Tick()
     Eq(env.UIParent.shown, false, "UI shown")
     Eq(env.OnStage("WorldMapFrame"), true, "map on the stage")
-    Eq(env.arrow.alpha, 0, "arrow alpha")
+    Eq(env.pinSizes.player, 0, "arrow size")
+    Eq(env.pinSizes.party, 11, "party size")
+    Eq(env.pinSizes.raid, 8.25, "raid size")
     env.G.WorldMapFrame:Hide()
     env.Tick()
     Eq(env.G.WorldMapFrame.parent, env.UIParent, "map parent after closing")
@@ -549,7 +555,20 @@ Test("/dui-arrow off shows the arrow again", function()
     env.G.WorldMapFrame:Show()
     env.Tick()
     env.Slash("DUIARROW", "off")
-    Eq(env.arrow.alpha, 1, "arrow alpha")
+    Eq(env.pinSizes.player, 27, "arrow size")
+end)
+
+Test("/dui-group on hides party and raid members, off shows them again", function()
+    local env = Load()
+    env.G.WorldMapFrame:Show()
+    env.Tick()
+    env.Slash("DUIGROUP", "on")
+    Eq(env.pinSizes.party, 0, "party size")
+    Eq(env.pinSizes.raid, 0, "raid size")
+    Eq(env.pinSizes.player, 0, "arrow size")
+    env.Slash("DUIGROUP", "off")
+    Eq(env.pinSizes.party, 11, "party size")
+    Eq(env.pinSizes.raid, 8.25, "raid size")
 end)
 
 Test("/dui-solo off: the map brings the UI back", function()
@@ -669,7 +688,7 @@ Test("chat sits on the stage, faded out unless typing", function()
     Eq(box.alpha, 0, "alpha after the linger")
 end)
 
-Test("chat shows for a moment when a whisper, party or guild message arrives", function()
+Test("chat shows for a moment when a whisper, party or guild message or a ping arrives", function()
     local env = Load()
     local chat = env.G.ChatFrame1
     Eq(chat.alpha, 0, "faded out")
@@ -685,10 +704,37 @@ Test("chat shows for a moment when a whisper, party or guild message arrives", f
     env.Tick()
     Eq(chat.alpha, 1, "shown on a whisper from a secret sender")
     env.Tick(6)
+    env.Fire("CHAT_MSG_PING", "Attack", "Me", "", "", "", "", 0, 0, "", 0, 5, "Player-1")
+    env.Tick()
+    Eq(chat.alpha, 1, "shown on your own ping")
+    env.Tick(6)
     env.G.SlashCmdList.DUIMESSAGES("off")
     env.Fire("CHAT_MSG_WHISPER", "hi", "Kiev", "", "", "", "", 0, 0, "", 0, 4, "Player-2")
     env.Tick()
     Eq(chat.alpha, 0, "not with the switch off")
+end)
+
+Test("a ping shows in the world with the UI hidden", function()
+    local env = Load()
+    -- The game makes the pin on the first ping, under UIParent.
+    local pin = env.NewFrame("PingPinTest", env.UIParent)
+    function pin:GetObjectType() return "PingPin" end
+    function pin:IsForbidden() return false end
+    pin.strata = "WORLD"
+    env.Fire("CHAT_MSG_PING", "Attack", "Kiev", "", "", "", "", 0, 0, "", 0, 1, "Player-2")
+    env.Tick()
+    Eq(env.OnStage("PingPinTest"), true, "pin on the stage")
+    Eq(pin.strata, "WORLD", "pin keeps its strata")
+    env.Fire("PLAYER_REGEN_DISABLED")
+    env.Tick()
+    Eq(pin.parent, env.UIParent, "back under UIParent in combat")
+    env.Fire("PLAYER_REGEN_ENABLED")
+    env.Tick()
+    -- The game took it back meanwhile.
+    pin:SetParent(env.UIParent)
+    env.Fire("CHAT_MSG_PING", "Attack", "Kiev", "", "", "", "", 0, 0, "", 0, 2, "Player-2")
+    env.Tick()
+    Eq(env.OnStage("PingPinTest"), true, "on the stage again")
 end)
 
 Test("an item link clicked in chat shows with the UI hidden", function()
@@ -1088,6 +1134,25 @@ Test("the minimap addon button opens a quick menu of the switches", function()
     menu.items[#menu.items].Click()
     Eq(env.options.opened, 7, "options page opened")
     Eq(env.UIParent.shown, true, "UI shown for the page")
+end)
+
+Test("the options open on our page even when the panel shows again after", function()
+    local env = Load({ options = true })
+    local panel = env.G.SettingsPanel
+    env.Slash("DUIOPTIONS")
+    Eq(env.options.opened, 7, "our page")
+    -- Blizzard's panel goes to its first page each time it shows.
+    panel:HookScript("OnShow", function() env.options.opened = 1 end)
+    panel:Hide()
+    panel:Show()
+    env.Tick()
+    Eq(env.options.opened, 7, "our page again")
+    -- Later, opened some other way, it's left alone.
+    env.Tick(2)
+    panel:Hide()
+    panel:Show()
+    env.Tick()
+    Eq(env.options.opened, 1, "first page")
 end)
 
 Test("/dui-status runs", function()

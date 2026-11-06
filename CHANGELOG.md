@@ -2,7 +2,10 @@
 
 ## v0.3.3
 
+- New option, off at first: hide your party and raid members on the world map (`/dui-group`). Hiding your arrow now hides only your arrow; before, it hid your group too.
+- Pings show in the world with the UI hidden, and chat shows for 5 seconds when someone pings, you too (with the switch for new messages).
 - Fixed: with MoveAny, windows first opened more than a minute after logging in, with the UI hidden, showed where the game puts them and couldn't be dragged, until a /reload.
+- Fixed: "All options…" in the quick menu, and `/dui-options`, sometimes opened the first page of the game's options instead of this addon's.
 
 ## v0.3.2
 

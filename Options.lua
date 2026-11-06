@@ -36,7 +36,27 @@ if Settings and Settings.RegisterVerticalLayoutCategory then
         settings[option.key] = setting
     end
     Settings.RegisterAddOnCategory(category)
-    ns.OpenOptions = function() Settings.OpenToCategory(category:GetID()) end
+
+    -- The panel goes to its first page when it shows. Opened with the UI
+    -- hidden, it shows again after it went to our page: when it's staged, or
+    -- reopened after the UI coming back closed it. Go to our page again then.
+    local function Open() Settings.OpenToCategory(category:GetID()) end
+    local waiting, hooked
+    ns.OpenOptions = function()
+        Open()
+        if not (SettingsPanel and SettingsPanel.HookScript) then return end
+        if not hooked then
+            hooked = true
+            SettingsPanel:HookScript("OnShow", function()
+                if not waiting then return end
+                waiting = false
+                C_Timer.After(0, Open)
+            end)
+        end
+        waiting = true
+        -- If it never shows (combat), the next time it's opened isn't ours.
+        C_Timer.After(1, function() waiting = false end)
+    end
 end
 
 local function QuickMenu()
