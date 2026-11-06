@@ -40,7 +40,7 @@ Dynamic Immersive UI is for players who want to see the world, not the interface
 
 **See it in game**
 
-A fight brings the UI back, and it hides again once the fight is over (the fight is sped up):
+A fight brings the UI back, and it hides again once the fight is over (the middle of the fight is cut):
 
 ![Combat](IMAGE:1-combate.gif)
 
