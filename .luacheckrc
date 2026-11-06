@@ -35,6 +35,7 @@ read_globals = {
     "InterfaceOptions_AddCategory",
     "InterfaceOptionsFrame_OpenToCategory",
     "issecretvalue",
+    "UnitGUID",
     "MinimapCluster",
     "NUM_CHAT_WINDOWS",
     "SetUIVisibility",

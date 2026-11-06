@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.0
+
+- Chat shows for 5 seconds when a whisper, party or guild message arrives while the UI is hidden. Switch it off with `/dui-messages off` or in the options panel.
+- Need/greed rolls show with the UI hidden. A roll you couldn't see used to pass when its timer ran out.
+- Fixed: clicking an item link in chat didn't show the item with the UI hidden.
+
 ## v0.1.5
 
 - Fixed: bags opened with the UI hidden, the reagent bag especially, were covered by a grey box over their slots.

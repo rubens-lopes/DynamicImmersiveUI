@@ -133,12 +133,17 @@ local function Load(opts)
     NewFrame("ChatFrame1", UIParent, true)
     NewFrame("ChatFrame1EditBox", UIParent, true)
     NewFrame("GameTooltip", UIParent, false).strata = "TOOLTIP"
+    -- Owners are kept as given; the client would hide one owned by a hidden frame.
+    local itemRef = NewFrame("ItemRefTooltip", UIParent, false)
+    itemRef.strata = "TOOLTIP"
+    function itemRef:SetOwner(owner) self.owner = owner end
     NewFrame("UIErrorsFrame", UIParent, true)
     local cluster = NewFrame("MinimapCluster", UIParent, true)
     NewFrame("Minimap", cluster, true)
     local container = NewFrame("MirrorTimerContainer", UIParent, true)
     NewFrame("MirrorTimer1", container, false)
     NewFrame("PlayerCastingBarFrame", UIParent, false)
+    NewFrame("GroupLootFrame1", UIParent, false).strata = "DIALOG"
     -- Closing the quest window ends the quest dialog, like CloseQuest.
     local quest = NewFrame("QuestFrame", UIParent, false)
     quest:HookScript("OnHide", function() env.questClosed = true end)
@@ -238,6 +243,7 @@ local function Load(opts)
 
     env.unit = { exists = false, dead = false }
     G.UnitExists = function() return env.unit.exists end
+    G.UnitGUID = function() return "Player-1" end
     G.UnitIsDead = function() return env.unit.dead end
     G.SlashCmdList = {}
     G.DynamicImmersiveUIDB = opts.saved
@@ -546,12 +552,45 @@ Test("chat sits on the stage, faded out unless typing", function()
     Eq(box.alpha, 0, "alpha after the linger")
 end)
 
-Test("tooltips, quest text, the cast bar and the breath bar stay visible", function()
+Test("chat shows for a moment when a whisper, party or guild message arrives", function()
+    local env = Load()
+    local chat = env.G.ChatFrame1
+    Eq(chat.alpha, 0, "faded out")
+    env.Fire("CHAT_MSG_GUILD", "hi", "Kiev", "", "", "", "", 0, 0, "", 0, 1, "Player-2")
+    env.Tick()
+    Eq(chat.alpha, 1, "shown on a guild message")
+    env.Tick(6)
+    Eq(chat.alpha, 0, "faded out after the linger")
+    env.Fire("CHAT_MSG_PARTY", "hi", "Me", "", "", "", "", 0, 0, "", 0, 2, "Player-1")
+    env.Tick()
+    Eq(chat.alpha, 0, "not on your own message")
+    env.Fire("CHAT_MSG_WHISPER", "hi", "Kiev", "", "", "", "", 0, 0, "", 0, 3, "SECRET")
+    env.Tick()
+    Eq(chat.alpha, 1, "shown on a whisper from a secret sender")
+    env.Tick(6)
+    env.G.SlashCmdList.DUIMESSAGES("off")
+    env.Fire("CHAT_MSG_WHISPER", "hi", "Kiev", "", "", "", "", 0, 0, "", 0, 4, "Player-2")
+    env.Tick()
+    Eq(chat.alpha, 0, "not with the switch off")
+end)
+
+Test("an item link clicked in chat shows with the UI hidden", function()
+    local env = Load()
+    local tooltip = env.G.ItemRefTooltip
+    tooltip:SetOwner(env.UIParent, "ANCHOR_PRESERVE")
+    Eq(tooltip.owner, env.G.DynamicImmersiveUIStageTOOLTIP, "owned by the stage")
+    env.Fire("PLAYER_REGEN_DISABLED")
+    tooltip:SetOwner(env.UIParent, "ANCHOR_PRESERVE")
+    Eq(tooltip.owner, env.UIParent, "owned by UIParent with the UI shown")
+end)
+
+Test("tooltips, quest text, the cast bar, the breath bar and loot rolls stay visible", function()
     local env = Load()
     Eq(env.OnStage("GameTooltip"), true, "tooltip on the stage")
     Eq(env.OnStage("PlayerCastingBarFrame"), true, "cast bar on the stage")
     Eq(env.OnStage("UIErrorsFrame"), true, "quest text on the stage")
     Eq(env.OnStage("MirrorTimerContainer"), true, "breath bar container on the stage")
+    Eq(env.OnStage("GroupLootFrame1"), true, "loot roll on the stage")
     Eq(env.G.MirrorTimer1.parent, env.G.MirrorTimerContainer, "breath bar parent")
     Eq(env.G.UIErrorsFrame.alpha, 1, "quest text alpha")
     env.Fire("PLAYER_REGEN_DISABLED")

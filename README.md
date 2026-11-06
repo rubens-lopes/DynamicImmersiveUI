@@ -8,7 +8,7 @@ A World of Warcraft: Forever addon for immersion. The whole UI hides the way Alt
 
 Being in a group doesn't bring it back; only combat does. A dead target doesn't either: loot it and only the loot window shows.
 
-Out of combat, the world map, the loot window, your bags and any window you open from a minimap button show **on their own**, with the rest of the UI still hidden; Esc closes them. So do quests from objects in the world, mailboxes and books, which you open without a target. Chat works too: press Enter and type as usual, and chat fades away 5 seconds after you're done. The minimap, tooltips, your cast bar, the breath bar and the yellow quest progress text ("Wolf Pelt: 3/8") always show.
+Out of combat, the world map, the loot window, your bags and any window you open from a minimap button show **on their own**, with the rest of the UI still hidden; Esc closes them. So do quests from objects in the world, mailboxes and books, which you open without a target. Chat works too: press Enter and type as usual, and chat fades away 5 seconds after you're done. A whisper, party or guild message shows chat for 5 seconds too. The minimap, tooltips, your cast bar, the breath bar, need/greed rolls and the yellow quest progress text ("Wolf Pelt: 3/8") always show.
 
 Your arrow on the world map is hidden, so you find your way from the landmarks.
 
@@ -22,13 +22,14 @@ Open the panel with `/dui-options`, or Esc > Options > AddOns > Dynamic Immersiv
 - **A target brings the UI back**: shows the UI while you have a living target.
 - **Map, loot window and bags on their own**: also windows opened from a minimap button. Off, these bring the whole UI back like any other window.
 - **Minimap always visible**: keeps the minimap on screen while the rest of the UI is hidden.
+- **Chat shows when someone talks to you**: a whisper, party or guild message shows chat for 5 seconds.
 - **Hide your arrow on the world map**: party and raid members still show.
 
 ## Commands
 
 - `/dui-help` lists the commands.
 - `/dui-options` opens the options panel.
-- `/dui-hide`, `/dui-target`, `/dui-solo`, `/dui-minimap` and `/dui-arrow` take `on` or `off`; with no argument they toggle.
+- `/dui-hide`, `/dui-target`, `/dui-solo`, `/dui-minimap`, `/dui-messages` and `/dui-arrow` take `on` or `off`; with no argument they toggle.
 - `/dui-status` shows what the addon sees. Its output is also saved in the addon's saved variables; include it in bug reports.
 
 Settings are saved per account.

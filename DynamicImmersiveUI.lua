@@ -36,6 +36,9 @@ local OPTIONS = {
           .. "those always show on their own, since bringing the UI back would close them." },
     { key = "minimap", command = "minimap", label = "Minimap always visible",
       help = "Keeps the minimap on screen while the rest of the UI is hidden. Turn this off to hide it with the UI." },
+    { key = "messages", command = "messages", label = "Chat shows when someone talks to you",
+      help = "While the UI is hidden, chat shows when a whisper, party or guild message arrives, and fades away "
+          .. "5 seconds later. Turn this off to see chat only while you type." },
     { key = "arrow", command = "arrow", label = "Hide your arrow on the world map",
       help = "Hides the arrow that marks where you are on the world map, so you find your way like a traveller. "
           .. "Party and raid members still show." },
@@ -142,7 +145,12 @@ local talking = {}
 local ALWAYS = {
     "CastingBarFrame", "PlayerCastingBarFrame", "PetCastingBarFrame",
     "MirrorTimerContainer", "MirrorTimer1", "MirrorTimer2", "MirrorTimer3",
-    "GameTooltip", "ShoppingTooltip1", "ShoppingTooltip2", "ItemRefTooltip", "UIErrorsFrame",
+    "GameTooltip", "ShoppingTooltip1", "ShoppingTooltip2", "ItemRefTooltip",
+    "ItemRefShoppingTooltip1", "ItemRefShoppingTooltip2", "UIErrorsFrame",
+    -- Need/greed rolls (the gamepad one too) and bonus rolls: a roll missed
+    -- while hidden is passed when its timer runs out.
+    "GroupLootFrame1", "GroupLootFrame2", "GroupLootFrame3", "GroupLootFrame4",
+    "GamepadGroupLootRollFrame", "BonusRollFrame",
     -- Lua error popups, so a bug isn't invisible.
     "ScriptErrorsFrame",
 }
@@ -556,6 +564,22 @@ local function HookPanels()
     end)
 end
 
+-- A tooltip whose owner is hidden hides too, and Blizzard gives some of them
+-- UIParent: an item link clicked in chat (SetItemRef), the mouseover
+-- tooltip. While the UI is hidden, the tooltip stage owns them instead.
+local function HookTooltips()
+    for _, name in ipairs({ "GameTooltip", "ItemRefTooltip" }) do
+        local tooltip = _G[name]
+        if type(tooltip) == "table" and tooltip.SetOwner then
+            hooksecurefunc(tooltip, "SetOwner", function(self, owner, ...)
+                if owner == UIParent and not UIParent:IsShown() then
+                    Try("show " .. name, self.SetOwner, self, GetStage("TOOLTIP"), ...)
+                end
+            end)
+        end
+    end
+end
+
 -- The minimap's new-mail icon hides whenever its frame does, the UI hiding
 -- included (MiniMapMailFrameMixin:OnHide), and Blizzard only shows it again
 -- with the next mail. Show it again with its frame.
@@ -726,6 +750,7 @@ function EVENTS.PLAYER_LOGIN()
     HookPanels()
     HookMap()
     HookMail()
+    HookTooltips()
     UIParent:HookScript("OnShow", function()
         if ours or not settings.hideUI then return end
         -- Esc or Alt+Z with a window on its own closes the window.
@@ -752,6 +777,22 @@ function EVENTS.PLAYER_REGEN_ENABLED()
     inCombat = false
     Evaluate()
 end
+
+-- Messages meant for you: chat shows for a moment. Not your own, which you
+-- just typed. The sender can be a secret value; then it counts.
+local MESSAGES = {
+    "CHAT_MSG_WHISPER", "CHAT_MSG_BN_WHISPER", "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER",
+    "CHAT_MSG_GUILD", "CHAT_MSG_OFFICER",
+}
+local function OnMessage(...)
+    if not settings.messages then return end
+    local guid = select(12, ...)
+    if guid ~= nil and not (issecretvalue and issecretvalue(guid)) and guid == UnitGUID("player") then return end
+    chatUntil = math.max(chatUntil, GetTime() + CHAT_LINGER)
+    Evaluate()
+    C_Timer.After(CHAT_LINGER + 0.1, Evaluate)
+end
+for _, event in ipairs(MESSAGES) do EVENTS[event] = OnMessage end
 
 function EVENTS.PLAYER_TARGET_CHANGED()
     manual = false
@@ -875,6 +916,8 @@ SLASH_DUISOLO1 = "/dui-solo"
 SlashCmdList.DUISOLO = MakeToggle("solo")
 SLASH_DUIMINIMAP1 = "/dui-minimap"
 SlashCmdList.DUIMINIMAP = MakeToggle("minimap")
+SLASH_DUIMESSAGES1 = "/dui-messages"
+SlashCmdList.DUIMESSAGES = MakeToggle("messages")
 SLASH_DUIARROW1 = "/dui-arrow"
 SlashCmdList.DUIARROW = MakeToggle("arrow")
 SLASH_DUISTATUS1 = "/dui-status"
