@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.3
+
+- Fixed: with MoveAny, windows first opened more than a minute after logging in, with the UI hidden, showed where the game puts them and couldn't be dragged, until a /reload.
+
 ## v0.3.2
 
 - Fixed: with the UI hidden, settings opened from an addon's minimap button menu (Frequent Flyer…) didn't show, and the UI flickered.

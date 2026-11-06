@@ -376,6 +376,20 @@ local function Load(opts)
     if opts.options then LoadOptions(env) end
     env.Fire("ADDON_LOADED", ADDON_NAME)
     env.Fire("PLAYER_LOGIN")
+    -- A minute after login MoveAny stops looking when a frame is created;
+    -- it looks once more as each window first shows, its hook after ours.
+    if opts.moveAnyLate then
+        env.moveAnySaw = {}
+        G.C_AddOns = { IsAddOnLoaded = function(name) return name == "MoveAny" end }
+        for _, name in ipairs({ "WorldMapFrame", "CharacterFrame" }) do
+            local looked = false
+            G.hooksecurefunc(G[name], "Show", function(self)
+                if looked then return end
+                looked = true
+                if self:IsVisible() then env.moveAnySaw[name] = true end
+            end)
+        end
+    end
     env.Fire("PLAYER_ENTERING_WORLD")
     env.Tick()
     return env
@@ -508,6 +522,26 @@ Test("MoveAny gets to see a window that brings the UI back", function()
     env.Tick()
     Eq(env.UIParent.shown, true, "UI shown")
     Eq(env.moveAnySaw.CharacterFrame, true, "MoveAny saw the character sheet")
+end)
+
+Test("a minute after login, MoveAny still sees a window shown on its own", function()
+    local env = Load({ moveAnyLate = true })
+    env.G.WorldMapFrame:Show()
+    Eq(env.moveAnySaw.WorldMapFrame, true, "MoveAny saw the map")
+    env.Tick()
+    Eq(env.OnStage("WorldMapFrame"), true, "map on the stage")
+end)
+
+Test("a minute after login, MoveAny still sees a window that brings the UI back", function()
+    local env = Load({ moveAnyLate = true })
+    env.G.CharacterFrame:Show()
+    Eq(env.moveAnySaw.CharacterFrame, true, "MoveAny saw the character sheet")
+    env.Tick()
+    env.Tick()
+    env.Tick()
+    Eq(env.UIParent.shown, true, "UI shown")
+    Eq(env.G.CharacterFrame.shown, true, "character sheet open")
+    Eq(env.G.CharacterFrame.parent, env.UIParent, "character sheet back under UIParent")
 end)
 
 Test("/dui-arrow off shows the arrow again", function()

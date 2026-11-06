@@ -94,11 +94,16 @@ end
 -- shows; under the hidden UI it never is, so moved windows open where
 -- Blizzard puts them and can't be dragged. Ask it to look again once
 -- windows can be seen: the UI back, or a window on the stage. It keeps its
--- functions to itself, but looks again whenever a frame is created.
+-- functions to itself, but looks again whenever a frame is created, for
+-- the first minute after login (ShowToMoveAny covers the rest).
+local function MoveAnyLoaded()
+    return C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("MoveAny")
+end
+
 local nudging = false
 local function NudgeMoveAny()
     if nudging then return end
-    if not (C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("MoveAny")) then return end
+    if not MoveAnyLoaded() then return end
     nudging = true
     C_Timer.After(0, function()
         nudging = false
@@ -576,12 +581,29 @@ local function NoteHiddenPanel(name, frame)
     end
 end
 
+-- A minute after login MoveAny stops looking when a frame is created, and
+-- its one look at a window is as that window first shows. With the UI
+-- hidden it sees nothing then, and the window stays where Blizzard puts it
+-- for the rest of the session (a /reload and a window opened at once hid
+-- this). Our Show hook runs before MoveAny's: that first time, put the
+-- window on the stage at once. The next evaluation takes it off again if it
+-- doesn't show alone.
+local firstShow = {}
+local function ShowToMoveAny(name, frame)
+    if firstShow[frame] then return end
+    firstShow[frame] = true
+    if ours or inCombat or isBag[name] or not settings.hideUI or UIParent:IsShown() then return end
+    if frame:GetParent() ~= UIParent or not MoveAnyLoaded() then return end
+    Stage(name, frame, Solo(name, frame))
+end
+
 local function HookWindow(name, frame)
     if hooked[frame] then return end
     hooked[frame] = true
     -- Show runs even while the parent is hidden; OnShow doesn't.
     hooksecurefunc(frame, "Show", function()
         NoteHiddenPanel(name, frame)
+        ShowToMoveAny(name, frame)
         Evaluate()
     end)
     frame:HookScript("OnHide", function()
