@@ -18,7 +18,7 @@ globals = {
 }
 
 read_globals = {
-    "C_Timer",
+    "C_AddOns", "C_Timer",
     "CloseAllBags",
     "CloseLoot",
     "ContainerFrame_ClearFullScreenFrame",

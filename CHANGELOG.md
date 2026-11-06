@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.5
+
+- Fixed: bags opened with the UI hidden, the reagent bag especially, were covered by a grey box over their slots.
+- Fixed: with MoveAny, windows couldn't be moved and opened where Blizzard puts them instead of where you moved them.
+
 ## v0.1.4
 
 - Fixed: opening a letter at a mailbox brought the UI back and closed the mailbox, so you couldn't take its attachments. Letters, and the confirmations they ask for, now show on their own with the mailbox.

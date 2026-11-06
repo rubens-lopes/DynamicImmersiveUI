@@ -43,18 +43,21 @@ local function Load(opts)
             Run(self, "OnHide")
         end
         -- Like the client, a new parent hands down its strata, and the frame
-        -- and its children are renumbered from the parent's level.
-        -- SetFrameStrata, below, changes only the frame itself.
-        local function Renumber(frame, level, strata)
-            frame.level = level
+        -- and its children move along to just above the parent's level,
+        -- keeping their places relative to the frame. SetFrameStrata and
+        -- SetFrameLevel, below, change only the frame itself.
+        local function Renumber(frame, shift, strata)
+            frame.level = frame.level + shift
+            -- Under 0 it goes on top, and stays there.
+            if frame.level < 0 then frame.level = 9999 end
             frame.strata = strata
             for _, child in ipairs(frames) do
-                if child.parent == frame then Renumber(child, level + 1, strata) end
+                if child.parent == frame then Renumber(child, shift, strata) end
             end
         end
         function f:SetParent(p)
             self.parent = p
-            Renumber(self, p and p.level + 1 or 1, p and p.strata or "MEDIUM")
+            Renumber(self, (p and p.level + 1 or 1) - self.level, p and p.strata or "MEDIUM")
         end
         function f:GetFrameStrata() return self.strata end
         function f:SetFrameStrata(s) self.strata = s end
@@ -178,12 +181,28 @@ local function Load(opts)
     -- unless ContainerFrame_SetFullScreenFrame says otherwise.
     local bags = G.ContainerFrameCombinedBags
     local bagsBar = NewFrame("BagsBar", UIParent, true)
+    G.FrameUtil = { SetParentMaintainRenderLayering = function(f, p)
+        local strata, level = f:GetFrameStrata(), f:GetFrameLevel()
+        f:SetParent(p)
+        f:SetFrameStrata(strata)
+        f:SetFrameLevel(level)
+    end }
+    -- The reagent bag, an individual bag, lives high up in a top-level
+    -- container, above its slots.
+    local container = NewFrame("ContainerFrameContainer", UIParent, true)
+    container.level = 20
+    local reagents = NewFrame("ContainerFrame6", container, false)
+    reagents.level = 21
+    NewFrame("ContainerFrame6Item1", reagents, true).level = 22
+    NewFrame("ContainerFrame6Bg", reagents, true).level = 0
     local fullscreen = UIParent
     if not opts.oldBags then
+        -- Like ReparentContainerFrames.
         G.ContainerFrame_SetFullScreenFrame = function(f)
             fullscreen = f
-            bags:SetParent(f)
-            bagsBar:SetParent(f)
+            G.FrameUtil.SetParentMaintainRenderLayering(bags, f)
+            G.FrameUtil.SetParentMaintainRenderLayering(bagsBar, f)
+            G.FrameUtil.SetParentMaintainRenderLayering(G.ContainerFrame6, f)
         end
         G.ContainerFrame_ClearFullScreenFrame = function() G.ContainerFrame_SetFullScreenFrame(UIParent) end
     end
@@ -192,6 +211,11 @@ local function Load(opts)
         if not fullscreen.shown then return end
         if bags.shown then bags:Hide() else bags:Show() end
     end
+    G.ToggleBag = function()
+        env.calls[#env.calls + 1] = "ToggleBag"
+        if not fullscreen.shown then return end
+        if reagents.shown then reagents:Hide() else reagents:Show() end
+    end
     G.OpenAllBags = function()
         env.calls[#env.calls + 1] = "OpenAllBags"
         if fullscreen.shown then bags:Show() end
@@ -199,6 +223,7 @@ local function Load(opts)
     G.CloseAllBags = function()
         env.calls[#env.calls + 1] = "CloseAllBags"
         bags:Hide()
+        reagents:Hide()
     end
     -- A mailbox: the mail window, then the bags (MailFrame_Show).
     local mailbox = NewFrame("MailFrame", UIParent, false)
@@ -216,6 +241,17 @@ local function Load(opts)
     G.UnitIsDead = function() return env.unit.dead end
     G.SlashCmdList = {}
     G.DynamicImmersiveUIDB = opts.saved
+    -- MoveAny takes over windows that are visible when it looks: whenever a
+    -- frame is created.
+    if opts.moveAny then
+        env.moveAnySaw = {}
+        G.C_AddOns = { IsAddOnLoaded = function(name) return name == "MoveAny" end }
+        G.hooksecurefunc(G, "CreateFrame", function()
+            for _, name in ipairs({ "WorldMapFrame", "CharacterFrame" }) do
+                if G[name]:IsVisible() then env.moveAnySaw[name] = true end
+            end
+        end)
+    end
 
     function env.Fire(event, ...)
         for _, f in ipairs(frames) do
@@ -365,6 +401,24 @@ Test("the map shows on its own, with the arrow hidden", function()
     env.G.WorldMapFrame:Hide()
     env.Tick()
     Eq(env.G.WorldMapFrame.parent, env.UIParent, "map parent after closing")
+end)
+
+Test("MoveAny gets to see a window shown on its own", function()
+    local env = Load({ moveAny = true })
+    env.G.WorldMapFrame:Show()
+    env.Tick()
+    env.Tick()
+    Eq(env.moveAnySaw.WorldMapFrame, true, "MoveAny saw the map")
+end)
+
+Test("MoveAny gets to see a window that brings the UI back", function()
+    local env = Load({ moveAny = true })
+    env.G.CharacterFrame:Show()
+    env.Tick()
+    env.Tick()
+    env.Tick()
+    Eq(env.UIParent.shown, true, "UI shown")
+    Eq(env.moveAnySaw.CharacterFrame, true, "MoveAny saw the character sheet")
 end)
 
 Test("/dui-arrow off shows the arrow again", function()
@@ -527,6 +581,24 @@ Test("a bag on the stage stays under its own buttons", function()
     env.Tick()
     Eq(bags.parent, env.UIParent, "bag parent after closing")
     Eq(sort.strata, bags.strata, "sort button strata after closing")
+end)
+
+Test("the reagent bag stays under its own slots", function()
+    local env = Load()
+    local reagents = env.G.ContainerFrame6
+    local slot = env.G.ContainerFrame6Item1
+    env.G.ToggleBag(5)
+    env.Tick()
+    Eq(reagents.shown, true, "reagent bag open")
+    Eq(env.OnStage("ContainerFrame6"), true, "reagent bag on the stage")
+    Eq(slot.level > reagents.level, true, "slot above the bag")
+    Eq(env.G.ContainerFrame6Bg.level < reagents.level, true, "background below the bag")
+    env.G.ToggleBag(5)
+    env.Tick()
+    Eq(reagents.parent, env.G.ContainerFrameContainer, "reagent bag parent after closing")
+    Eq(reagents.level, 21, "reagent bag level after closing")
+    Eq(slot.level, 22, "slot level after closing")
+    Eq(env.G.ContainerFrame6Bg.level, 0, "background level after closing")
 end)
 
 Test("Esc closes a bag shown on its own and keeps the UI hidden", function()

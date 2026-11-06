@@ -83,9 +83,26 @@ local function Try(what, fn, ...)
     return ok
 end
 
+-- MoveAny takes over a window only once it's visible, checking when it first
+-- shows; under the hidden UI it never is, so moved windows open where
+-- Blizzard puts them and can't be dragged. Ask it to look again once
+-- windows can be seen: the UI back, or a window on the stage. It keeps its
+-- functions to itself, but looks again whenever a frame is created.
+local nudging = false
+local function NudgeMoveAny()
+    if nudging then return end
+    if not (C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("MoveAny")) then return end
+    nudging = true
+    C_Timer.After(0, function()
+        nudging = false
+        Try("let MoveAny move windows", CreateFrame, "Frame")
+    end)
+end
+
 local function SetUI(show)
     ours = true
     if Try(show and "show the UI" or "hide the UI", SetUIVisibility, show) then uiOff = not show end
+    if show then NudgeMoveAny() end
     ours = false
 end
 
@@ -146,6 +163,12 @@ end
 -- frame and everything in it; setting the frame's own strata back afterwards
 -- doesn't reach its children, and a bag ends up drawn over its own buttons.
 -- On a stage of its own strata, nothing needs setting back.
+-- SetParent moves a frame and everything in it to just above the new parent,
+-- keeping the gaps; a part below its frame (a bag's background, level 0,
+-- under a bag high up in its container) can end up under 0, where the client
+-- puts it on top of everything instead, for good. Stages sit high enough.
+-- Not too high either: the map's pins sit high above it already.
+local STAGE_LEVEL = 500
 local stages = {}
 local isStage = {}
 
@@ -155,6 +178,7 @@ local function GetStage(strata)
         stage = CreateFrame("Frame", "DynamicImmersiveUIStage" .. strata)
         stage:SetAllPoints(UIParent)
         stage:SetFrameStrata(strata)
+        stage:SetFrameLevel(STAGE_LEVEL)
         stages[strata] = stage
         isStage[stage] = true
     end
@@ -173,6 +197,7 @@ local function Stage(name, frame, solo)
         strata = frame:GetFrameStrata(), solo = solo }
     if Try("show " .. name .. " on its own", frame.SetParent, frame, GetStage(saved.strata)) then
         staged[frame] = saved
+        if solo then NudgeMoveAny() end
     end
 end
 
@@ -310,25 +335,54 @@ local EvaluateNow
 -- Bags open only while the frame they live in shows: UIParent, unless told
 -- otherwise (ContainerFrame_SetFullScreenFrame). Open them in the stage, then
 -- put them and the bag bar back where they were, all in one frame.
+-- Blizzard moves them with FrameUtil.SetParentMaintainRenderLayering, which
+-- sets the bag's own level back but leaves its slots where the move put
+-- them: under the bag, which then covers them in grey. So note the strata
+-- and level of every frame in them first, and set them all back after.
 local function OpenBagsOnStage(fn, arg)
+    -- frame -> parent; frame -> { { frame, parent, strata, level }, … } for it and
+    -- everything in it.
     local parents = {}
-    local function Note(frame)
-        if type(frame) == "table" and frame.GetParent then parents[frame] = frame:GetParent() end
+    local layers = {}
+    local function NoteLayers(frame, list)
+        list[#list + 1] = { frame, frame:GetParent(), frame:GetFrameStrata(), frame:GetFrameLevel() }
+        for _, child in ipairs({ frame:GetChildren() }) do NoteLayers(child, list) end
     end
-    Note(_G.BagsBar)
-    for _, name in ipairs(BAGS) do Note(_G[name]) end
+    local function Note(frame)
+        parents[frame] = frame:GetParent()
+        layers[frame] = {}
+        NoteLayers(frame, layers[frame])
+    end
+    for _, name in ipairs({ "BagsBar", unpack(BAGS) }) do
+        local frame = _G[name]
+        if type(frame) == "table" and frame.GetParent then Note(frame) end
+    end
     ours = true
     if Try("open your bags", ContainerFrame_SetFullScreenFrame, GetStage("MEDIUM")) then
         Try("open your bags", fn, arg)
+        -- A bag the key closed has left the stage: it goes back where that put it.
+        for frame, parent in pairs(parents) do
+            if isStage[parent] and not staged[frame] then Note(frame) end
+        end
         Try("open your bags", ContainerFrame_ClearFullScreenFrame)
     end
     ours = false
     local Reparent = FrameUtil and FrameUtil.SetParentMaintainRenderLayering
     for frame, parent in pairs(parents) do
-        -- A bag the key closed has left the stage already.
-        if frame:GetParent() ~= parent and not (isStage[parent] and not staged[frame]) then
+        if frame:GetParent() ~= parent then
             Try("put your bags back", Reparent or frame.SetParent, frame, parent)
         end
+        -- Parents first, so a child set afterwards stays where it was put.
+        Try("put your bags back", function()
+            for _, layer in ipairs(layers[frame]) do
+                local f, parent, strata, level = layer[1], layer[2], layer[3], layer[4]
+                -- Moved meanwhile (the search box goes to whichever bag opens first).
+                if f:GetParent() == parent then
+                    if f:GetFrameStrata() ~= strata then f:SetFrameStrata(strata) end
+                    if f:GetFrameLevel() ~= level then f:SetFrameLevel(level) end
+                end
+            end
+        end)
     end
 end
 
@@ -367,6 +421,7 @@ local function ReopenPanel()
     pendingPanel = nil
     reopening = false
     if panel and not panel.frame:IsShown() then Try("reopen " .. panel.name, ShowUIPanel, panel.frame) end
+    NudgeMoveAny()
     EvaluateNow()
 end
 
