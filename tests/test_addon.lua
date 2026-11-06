@@ -241,6 +241,23 @@ local function Load(opts)
     end
     -- What the mouse is over.
     G.GetMouseFoci = function() return { env.mouse } end
+    -- Blizzard's callback registry; env.Trigger fires one of its events.
+    local callbacks = {}
+    G.EventRegistry = { RegisterCallback = function(_, event, fn, owner)
+        callbacks[event] = callbacks[event] or {}
+        table.insert(callbacks[event], function(...) fn(owner, ...) end)
+    end }
+    function env.Trigger(event, ...)
+        for _, fn in ipairs(callbacks[event] or {}) do fn(...) end
+    end
+    -- A Blizzard menu (MenuUtil.CreateContextMenu): hidden from GetMouseFoci.
+    function env.OpenMenu(parent)
+        local menu = NewFrame(nil, parent, false)
+        menu:HookScript("OnShow", function() env.Trigger("MenuProxy.OnShow", menu) end)
+        menu:HookScript("OnHide", function() env.Trigger("MenuProxy.OnHide", menu) end)
+        menu:Show()
+        return menu
+    end
     -- Bags refuse to open while the frame they live in is hidden: UIParent,
     -- unless ContainerFrame_SetFullScreenFrame says otherwise.
     local bags = G.ContainerFrameCombinedBags
@@ -803,6 +820,36 @@ Test("a window opened from a dropdown menu (no parent) shows on its own", functi
     env.Tick()
     Eq(env.UIParent.shown, false, "UI shown")
     Eq(env.OnStage("SomeAddonConfig"), true, "window on the stage")
+end)
+
+Test("the settings panel opened from a minimap button's menu shows on its own", function()
+    local env = Load()
+    Click(env, function() env.OpenMenu(nil) end)
+    env.Tick(0.3)
+    -- Over a menu, GetMouseFoci gives the world.
+    env.mouse = env.G.WorldFrame
+    local toggles = #env.visibility
+    env.Fire("GLOBAL_MOUSE_DOWN", "LeftButton")
+    env.G.ShowUIPanel(env.G.SettingsPanel)
+    env.Fire("GLOBAL_MOUSE_UP", "LeftButton")
+    env.Tick()
+    env.Tick()
+    Eq(env.UIParent.shown, false, "UI shown")
+    Eq(env.G.SettingsPanel.shown, true, "settings open")
+    Eq(env.OnStage("SettingsPanel"), true, "settings on the stage")
+    -- Not even for a frame: that flickers.
+    Eq(#env.visibility - toggles, 0, "times the UI was shown or hidden")
+end)
+
+Test("a menu opened from a minimap button is left where Blizzard put it", function()
+    local env = Load()
+    local menu
+    Click(env, function() menu = env.OpenMenu(env.UIParent) end)
+    env.Tick(0.3)
+    Eq(menu.parent, env.UIParent, "menu parent")
+    menu:Hide()
+    env.Tick()
+    Eq(menu.parent, env.UIParent, "menu parent after closing")
 end)
 
 Test("a click on the world frame doesn't make windows show on their own", function()

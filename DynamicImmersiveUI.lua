@@ -141,6 +141,17 @@ local INTERACTIONS = {
 local isInteraction = {}
 for _, name in ipairs(INTERACTIONS) do isInteraction[name] = true end
 local talking = {}
+-- Blizzard's menus (a minimap button's right-click menu, the addon
+-- compartment's) open with no parent, so they show anyway: never staged,
+-- or closing one would hand it to UIParent for good (ResetMenu sets it to
+-- nil). They're hidden from GetMouseFoci, which gives WorldFrame over them;
+-- one open with the UI hidden was opened from something on the stage, so a
+-- click while it's open counts as one there: menu -> true.
+local menus = {}
+if EventRegistry and EventRegistry.RegisterCallback then
+    EventRegistry:RegisterCallback("MenuProxy.OnShow", function(_, menu) menus[menu] = true end, menus)
+    EventRegistry:RegisterCallback("MenuProxy.OnHide", function(_, menu) menus[menu] = nil end, menus)
+end
 
 -- Always visible, even with the UI hidden: the cast bar (CastingBarFrame on
 -- older clients, PlayerCastingBarFrame on newer ones; the pet's too), the
@@ -243,7 +254,7 @@ end
 local staged = {}
 
 local function Stage(name, frame, solo)
-    if staged[frame] then return end
+    if staged[frame] or menus[frame] then return end
     if frame:IsProtected() and InCombatLockdown() then return end
     local saved = { name = name, parent = frame:GetParent(), alpha = frame:GetAlpha(),
         strata = frame:GetFrameStrata(), solo = solo }
@@ -560,7 +571,7 @@ local function NoteHiddenPanel(name, frame)
     -- coming back would close the mailbox.
     if isInteraction[name] or next(talking) then
         talking[frame] = name
-    elseif not Solo(name) and not pendingPanel then
+    elseif not Solo(name, frame) and not pendingPanel then
         pendingPanel = { name = name, frame = frame }
     end
 end
@@ -682,6 +693,7 @@ local function OnStage(region)
 end
 
 local function MouseOnStage()
+    if next(menus) then return true end
     local foci = GetMouseFoci and GetMouseFoci() or { GetMouseFocus and GetMouseFocus() }
     for _, region in ipairs(foci) do
         if OnStage(region) then return true end
@@ -721,7 +733,7 @@ end
 local function ScanClick()
     if not before then return end
     for child in pairs(ShownChildren()) do
-        if not before[child] then
+        if not before[child] and not menus[child] then
             before[child] = true
             extra[child] = child:GetName() or "a window"
             HookExtra(child)

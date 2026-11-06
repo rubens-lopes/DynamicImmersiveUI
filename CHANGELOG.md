@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.3.2
+
+- Fixed: with the UI hidden, settings opened from an addon's minimap button menu (Frequent Flyer…) didn't show, and the UI flickered.
+- Fixed: with the UI hidden, those menus could show with a dark box over their items.
+
 ## v0.3.1
 
 - Fixed: with the UI hidden, addon settings opened from the addons button on the minimap (MapUtils, MoveAny…) didn't show. They now show on their own, like a window opened from a minimap button, and Esc closes them.
