@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.2.1
 
 - New option, off at first: action bars show when you move the mouse over them with the UI hidden, one bar at a time, and fade away after. Turn it on with `/dui-bars` or in the options panel. Bars moved with Edit Mode show where you put them.
 
