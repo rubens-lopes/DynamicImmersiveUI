@@ -194,6 +194,17 @@ local function Load(opts)
     itemRef.strata = "TOOLTIP"
     function itemRef:SetOwner(owner) self.owner = owner end
     NewFrame("UIErrorsFrame", UIParent, true)
+    -- Your buffs, and the auras the client reports: env.auras[i] = aura data.
+    NewFrame("BuffFrame", UIParent, true).strata = "LOW"
+    env.auras = {}
+    G.C_UnitAuras = {
+        GetAuraDataByIndex = function(_, i) return env.auras[i] end,
+        GetAuraDataByAuraInstanceID = function(_, id)
+            for _, aura in ipairs(env.auras) do
+                if aura.auraInstanceID == id then return aura end
+            end
+        end,
+    }
     -- Action bars, high above UIParent like MainActionBar's frameLevel 50.
     local bar = NewFrame("MainActionBar", UIParent, true)
     bar.level = 50
@@ -366,6 +377,18 @@ local function Load(opts)
             if f.shown and f.scripts.OnUpdate then f.scripts.OnUpdate(f, elapsed) end
         end
     end
+    -- Esc, like ToggleGameMenu: Blizzard shows a hidden UI (Game.lua), else
+    -- the game menu opens or closes.
+    G.ToggleGameMenu = function()
+        if not UIParent.shown then
+            UIParent:Show()
+        elseif G.GameMenuFrame.shown then
+            G.GameMenuFrame:Hide()
+        else
+            G.GameMenuFrame:Show()
+        end
+    end
+    function env.Esc() G.ToggleGameMenu() end
     function env.Slash(name, arg) G.SlashCmdList[name](arg) end
     function env.OnStage(name)
         local parent = G[name].parent
@@ -488,14 +511,48 @@ Test("saved settings survive a reload", function()
     Eq(env.G.DynamicImmersiveUIDB.target, true, "new switch filled in")
 end)
 
-Test("Esc keeps the UI until the target changes", function()
+Test("Alt+Z keeps the UI until the target changes", function()
     local env = Load()
     env.UIParent:Show() -- Blizzard, not the addon
     env.Tick()
-    Eq(env.UIParent.shown, true, "UI shown after Esc")
+    Eq(env.UIParent.shown, true, "UI shown after Alt+Z")
     env.Fire("PLAYER_TARGET_CHANGED")
     env.Tick()
     Eq(env.UIParent.shown, false, "UI shown after a target change")
+end)
+
+Test("Esc shows the UI for a moment", function()
+    local env = Load()
+    env.Esc()
+    env.Tick()
+    Eq(env.UIParent.shown, true, "UI shown after Esc")
+    env.Tick(4)
+    Eq(env.UIParent.shown, true, "UI shown 4 s later")
+    env.Tick(1.1)
+    Eq(env.UIParent.shown, false, "UI shown 5 s later")
+end)
+
+Test("Esc twice opens the game menu, which keeps the UI until it closes", function()
+    local env = Load()
+    env.Esc()
+    env.Tick()
+    env.Esc()
+    Eq(env.G.GameMenuFrame.shown, true, "game menu open")
+    env.Tick(6)
+    Eq(env.UIParent.shown, true, "UI shown with the menu")
+    env.Esc()
+    env.Tick()
+    Eq(env.UIParent.shown, false, "UI shown after the menu closed")
+end)
+
+Test("Alt+Z after Esc keeps the UI", function()
+    local env = Load()
+    env.Esc()
+    env.Tick()
+    env.Tick(5.1)
+    env.UIParent:Show() -- Alt+Z
+    env.Tick(10)
+    Eq(env.UIParent.shown, true, "UI shown")
 end)
 
 Test("the map shows on its own, with the arrow hidden", function()
@@ -688,6 +745,97 @@ Test("chat sits on the stage, faded out unless typing", function()
     Eq(box.alpha, 0, "alpha after the linger")
 end)
 
+Test("a fight ending while you type leaves the UI until you send", function()
+    local env = Load()
+    env.Fire("PLAYER_REGEN_DISABLED")
+    local box = env.G.ChatFrame1EditBox
+    box.focus = true
+    box:Run("OnEditFocusGained")
+    env.Fire("PLAYER_REGEN_ENABLED")
+    env.Tick()
+    Eq(env.UIParent.shown, true, "UI shown while typing")
+    box.focus = false
+    box:Run("OnEditFocusLost")
+    env.Tick()
+    Eq(env.UIParent.shown, false, "UI shown after sending")
+    Eq(box.alpha, 1, "chat still showing after sending")
+end)
+
+Test("the key binding toggles hiding", function()
+    local env = Load()
+    Eq(env.G.BINDING_NAME_DYNAMICIMMERSIVEUI_HIDE ~= nil, true, "binding named")
+    env.Slash("DUIHIDE", "")
+    Eq(env.UIParent.shown, true, "UI shown")
+    env.Slash("DUIHIDE", "")
+    Eq(env.UIParent.shown, false, "UI hidden again")
+end)
+
+Test("buffs show for a moment when you gain or renew one", function()
+    local env = Load()
+    Eq(env.OnStage("BuffFrame"), false, "hidden at first")
+    local aura = { auraInstanceID = 1, isHelpful = true, duration = 600, expirationTime = env.time + 600 }
+    env.auras[1] = aura
+    env.Fire("UNIT_AURA", "player", { addedAuras = { aura } })
+    env.Tick()
+    Eq(env.OnStage("BuffFrame"), true, "shown on a new buff")
+    Eq(env.G.BuffFrame.alpha, 0, "from nothing")
+    env.Update(0.15)
+    Eq(env.G.BuffFrame.alpha, 0.5, "fading in")
+    env.Update(0.15)
+    Eq(env.G.BuffFrame.alpha, 1, "faded in")
+    env.Tick(6)
+    Eq(env.OnStage("BuffFrame"), true, "fading out after the linger")
+    env.Update(0.15)
+    Eq(env.G.BuffFrame.alpha, 0.5, "fading out")
+    env.Update(0.15)
+    Eq(env.OnStage("BuffFrame"), false, "hidden once faded out")
+    Eq(env.G.BuffFrame.alpha, 1, "alpha back")
+    Eq(env.G.BuffFrame.parent, env.UIParent, "back under UIParent")
+    -- Ticking along: not renewed.
+    env.Fire("UNIT_AURA", "player", { updatedAuraInstanceIDs = { 1 } })
+    env.Tick()
+    Eq(env.OnStage("BuffFrame"), false, "not on an update")
+    aura.expirationTime = env.time + 600
+    env.Fire("UNIT_AURA", "player", { updatedAuraInstanceIDs = { 1 } })
+    env.Tick()
+    Eq(env.OnStage("BuffFrame"), true, "shown on a renewed buff")
+    env.Tick(6)
+    env.Update(1)
+    env.Fire("UNIT_AURA", "player", { addedAuras = { { isHelpful = false } } })
+    env.Tick()
+    Eq(env.OnStage("BuffFrame"), false, "not on a debuff")
+    env.Fire("UNIT_AURA", "player", { isFullUpdate = true })
+    env.Tick()
+    Eq(env.OnStage("BuffFrame"), false, "not on a full update")
+end)
+
+Test("buffs show while one runs out, unless /dui-buffs off", function()
+    local env = Load()
+    env.auras[1] = { auraInstanceID = 1, isHelpful = true, duration = 600, expirationTime = env.time + 40 }
+    env.Update(1)
+    env.Tick()
+    Eq(env.OnStage("BuffFrame"), false, "40 s left")
+    env.time = env.time + 10
+    env.Update(1)
+    env.Tick()
+    Eq(env.OnStage("BuffFrame"), true, "30 s left")
+    env.auras[1] = nil
+    env.Fire("UNIT_AURA", "player", { removedAuraInstanceIDs = { 1 } })
+    env.Tick()
+    env.Update(1)
+    Eq(env.OnStage("BuffFrame"), false, "gone with the buff")
+    env.auras[1] = { auraInstanceID = 2, isHelpful = true, duration = 600, expirationTime = "SECRET" }
+    env.Update(1)
+    env.Tick()
+    Eq(env.OnStage("BuffFrame"), false, "secret time left doesn't count")
+    env.Slash("DUIBUFFS", "off")
+    env.auras[1] = { auraInstanceID = 3, isHelpful = true, duration = 600, expirationTime = env.time + 10 }
+    env.Fire("UNIT_AURA", "player", { addedAuras = { env.auras[1] } })
+    env.Update(1)
+    env.Tick()
+    Eq(env.OnStage("BuffFrame"), false, "switch off")
+end)
+
 Test("chat shows for a moment when a whisper, party or guild message or a ping arrives", function()
     local env = Load()
     local chat = env.G.ChatFrame1
@@ -809,13 +957,11 @@ Test("Esc closes a bag shown on its own and keeps the UI hidden", function()
     env.G.ToggleBackpack()
     env.Tick()
     Eq(bags.shown, true, "bag open")
-    env.UIParent:Show() -- Blizzard's Esc
+    env.Esc()
     env.Tick()
     Eq(bags.shown, false, "bag open after Esc")
     Eq(env.UIParent.shown, false, "UI shown after Esc")
-    env.UIParent:Show() -- Esc again, nothing open: the UI comes back
-    env.Tick()
-    Eq(env.UIParent.shown, true, "UI shown after the second Esc")
+    Eq(env.G.GameMenuFrame.shown, false, "game menu open after Esc")
 end)
 
 -- A minimap button: a child of the minimap, which sits on the stage.
@@ -835,7 +981,7 @@ Test("a minimap button's window shows on its own; Esc closes it", function()
     Eq(env.OnStage("SomeAddonConfig"), true, "window on the stage")
     env.Tick(0.3)
     Eq(env.OnStage("SomeAddonConfig"), true, "window on the stage after the click")
-    env.UIParent:Show() -- Esc
+    env.Esc()
     env.Tick()
     Eq(window.shown, false, "window open after Esc")
     Eq(window.parent, env.UIParent, "window parent after Esc")
@@ -1009,7 +1155,7 @@ Test("Esc closes an interaction window that waited on the stage", function()
     env.G.ShowUIPanel(env.G.QuestFrame)
     env.Tick()
     env.Tick()
-    env.UIParent:Show()
+    env.Esc()
     Eq(env.G.QuestFrame.shown, false, "quest window open after Esc")
 end)
 

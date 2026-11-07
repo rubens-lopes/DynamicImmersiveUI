@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.4.0
+
+- Your buffs show with the UI hidden, fading in for 5 seconds when you gain or renew one, and while one has less than 30 seconds left. Switch it off with `/dui-buffs off` or in the options panel.
+- New key binding to turn hiding on or off: Key Bindings > Dynamic Immersive UI.
+- Esc brings the UI back for 5 seconds only; Esc again opens the game menu, and the UI hides when you close it. Alt+Z still brings it back until something changes.
+- Fixed: chat closed while you were typing when a fight ended. The UI now waits until you send or close the message.
+
 ## v0.3.4
 
 - Fixed: after opening the bank (or a vendor, a quest giver…) with the UI hidden, using an item from your bags was blocked for the rest of the session ("DynamicImmersiveUI has been blocked from an action only available to the Blizzard UI").

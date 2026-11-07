@@ -14,7 +14,9 @@ Your arrow on the world map is hidden, so you find your way from the landmarks; 
 
 If you want your action bars at hand, turn on `/dui-bars`: a bar then shows when you move the mouse over where it sits, and fades away when you move it off. Your key bindings work either way.
 
-Press Esc to bring the UI back until something changes (a target, a fight, a window); Esc again opens the game menu as usual.
+Your buffs fade in for a moment when you gain or renew one, and while one is about to run out.
+
+Esc brings the UI back for 5 seconds; Esc again opens the game menu, and the UI hides when you close it. Alt+Z brings the UI back until something changes (a target, a fight, a window). To turn hiding on or off with a key, set one in Key Bindings > Dynamic Immersive UI.
 
 ## Options
 
@@ -26,6 +28,7 @@ Open the panel with `/dui-options`, or Esc > Options > AddOns > Dynamic Immersiv
 - **Minimap always visible**: keeps the minimap on screen while the rest of the UI is hidden.
 - **Action bars show on mouseover** (off at first): a bar shows while the mouse is over it, only that bar. Bars you moved with Edit Mode show where you put them.
 - **Chat shows on new messages**: a whisper, party or guild message, or a ping (yours too), shows chat for 5 seconds.
+- **Buffs show when they change**: your buffs fade in for 5 seconds when you gain or renew one, and stay while one has less than 30 seconds left.
 - **Hide your arrow on the map**: party and raid members still show, unless you also turn on the next switch.
 - **Hide your group on the map** (off at first): hides the dots of your party and raid members.
 
@@ -33,7 +36,7 @@ Open the panel with `/dui-options`, or Esc > Options > AddOns > Dynamic Immersiv
 
 - `/dui-help` lists the commands.
 - `/dui-options` opens the options panel.
-- `/dui-hide`, `/dui-target`, `/dui-solo`, `/dui-minimap`, `/dui-bars`, `/dui-messages`, `/dui-arrow` and `/dui-group` take `on` or `off`; with no argument they toggle.
+- `/dui-hide`, `/dui-target`, `/dui-solo`, `/dui-minimap`, `/dui-bars`, `/dui-messages`, `/dui-buffs`, `/dui-arrow` and `/dui-group` take `on` or `off`; with no argument they toggle.
 - `/dui-status` shows what the addon sees. Its output is also saved in the addon's saved variables; include it in bug reports.
 
 Settings are saved per account.

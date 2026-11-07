@@ -34,9 +34,10 @@ Dynamic Immersive UI is for players who want to see the world, not the interface
 - So do quests from objects in the world, mailboxes and books: with no target to bring the UI back, they open on their own.
 - Chat works with the UI hidden: press Enter and type. It fades away 5 seconds after you're done.
 - The minimap, tooltips, the breath bar and the yellow quest progress text always show.
+- Your buffs show for a moment when you gain or renew one, and while one runs out.
 - Your arrow on the world map is hidden.
 - Optionally, your action bars show when you move the mouse over them.
-- Esc brings the UI back until something changes; Esc again opens the game menu.
+- Esc brings the UI back for 5 seconds; Esc again opens the game menu, and the UI hides when you close it. A key binding (Key Bindings > Dynamic Immersive UI) turns hiding on or off.
 
 **See it in game**
 
@@ -74,13 +75,14 @@ Every switch is in the options panel: type `/dui-options`, or Esc > Options > Ad
 - **Minimap always visible**
 - **Action bars show on mouseover** (off at first)
 - **Chat shows on new messages**
+- **Buffs show when they change**
 - **Hide your arrow on the map**
 
 **Commands**
 
 - `/dui-help` lists the commands.
 - `/dui-options` opens the options panel.
-- `/dui-hide`, `/dui-target`, `/dui-solo`, `/dui-minimap`, `/dui-bars`, `/dui-messages`, `/dui-arrow` each take `on` or `off`; with no argument they toggle.
+- `/dui-hide`, `/dui-target`, `/dui-solo`, `/dui-minimap`, `/dui-bars`, `/dui-messages`, `/dui-buffs`, `/dui-arrow` each take `on` or `off`; with no argument they toggle.
 - `/dui-status` shows what the addon sees. Include it in bug reports.
 
 Settings are saved per account.

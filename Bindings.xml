@@ -1,0 +1,5 @@
+<Bindings>
+    <Binding name="DYNAMICIMMERSIVEUI_HIDE" category="BINDING_HEADER_DYNAMICIMMERSIVEUI">
+        SlashCmdList.DUIHIDE("")
+    </Binding>
+</Bindings>

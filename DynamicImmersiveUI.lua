@@ -26,7 +26,8 @@ local CHAT_LINGER = 5
 local OPTIONS = {
     { key = "hideUI", command = "hide", section = "Hiding the UI", label = "Hide the UI out of combat",
       help = "Hides the whole UI, like Alt+Z, while you're out of combat. It comes back as soon as a fight starts. "
-          .. "Esc brings it back until something changes; Esc again opens the game menu as usual." },
+          .. "Esc brings it back for 5 seconds; Esc again opens the game menu, and the UI hides when you close it. "
+          .. "Alt+Z brings it back until something changes. You can set a key for this switch in Key Bindings." },
     { key = "target", command = "target", label = "A target brings the UI back",
       help = "Shows the UI while you have a living target, so you see its frame and your action bars. "
           .. "A dead target doesn't count: only the loot window shows." },
@@ -43,6 +44,9 @@ local OPTIONS = {
     { key = "messages", command = "messages", label = "Chat shows on new messages",
       help = "While the UI is hidden, chat shows when a whisper, party or guild message or a ping arrives, yours too, and fades away "
           .. "5 seconds later. Turn this off to see chat only while you type." },
+    { key = "buffs", command = "buffs", label = "Buffs show when they change",
+      help = "While the UI is hidden, your buffs fade in for 5 seconds when you gain or renew one, and while one has "
+          .. "less than 30 seconds left. Turn this off to keep them hidden with the UI." },
     { key = "arrow", command = "arrow", section = "World map", label = "Hide your arrow on the map",
       help = "Hides the arrow that marks where you are on the world map, so you find your way like a traveller. "
           .. "Party and raid members still show, unless you hide them too." },
@@ -64,7 +68,8 @@ local ours = false
 -- entering combat) leaves the engine's side off, nameplates included, so
 -- only SetUIVisibility(true) counts as back on.
 local uiOff = false
--- Blizzard showed the UI itself (Esc or Alt+Z). Kept until the next change.
+-- Blizzard showed the UI itself (Esc or Alt+Z). Kept until the next change,
+-- or a few seconds after Esc.
 local manual = false
 -- A bag key pressed while the UI was hidden: { name, fn, arg }.
 local pendingBag
@@ -75,6 +80,9 @@ local reopening = false
 -- Chat: the edit box being typed in, and until when chat stays after typing.
 local chatBox
 local chatUntil = 0
+-- Until when your buffs stay after you gain one.
+local BUFF_LINGER = 5
+local buffsUntil = 0
 
 local function Say(msg) print(TAG .. msg) end
 
@@ -191,12 +199,18 @@ local BARS = {
 }
 local isBar = {}
 for _, name in ipairs(BARS) do isBar[name] = true end
+-- With the buffs option on, on the stage for a moment when you gain a buff,
+-- and while one runs out, fading in and out. Only while they show: an
+-- invisible buff would still cancel on a right-click.
+local BUFFS = { "BuffFrame" }
+local isBuffs = { BuffFrame = true }
+local BUFF_FADE = 0.3
 -- Seconds a bar takes to fade in and out, and how many pixels around it the
 -- mouse still counts as over it.
 local BAR_FADE_IN = 0.15
 local BAR_FADE_OUT = 0.5
 local BAR_MARGIN = 8
--- bar -> alpha while it's on the stage.
+-- bar (or the buffs) -> alpha while it's on the stage.
 local barAlpha = {}
 
 local function Solo(name, frame)
@@ -255,9 +269,9 @@ local function RestoreLayers(list)
 end
 
 -- frame -> { name, parent, alpha, strata, solo, layers } while it sits on a
--- stage. solo: a window that Esc closes. layers: an action bar's levels, put
--- back with it; back under UIParent it would otherwise sit lower than the
--- frames around it.
+-- stage. solo: a window that Esc closes. layers: an action bar's (or the
+-- buffs') levels, put back with it; back under UIParent it would otherwise
+-- sit lower than the frames around it.
 local staged = {}
 
 local function Stage(name, frame, solo)
@@ -270,7 +284,7 @@ local function Stage(name, frame, solo)
     if frame:IsProtected() and InCombatLockdown() then return end
     local saved = { name = name, parent = frame:GetParent(), alpha = frame:GetAlpha(),
         strata = frame:GetFrameStrata(), solo = solo }
-    if isBar[name] and not Try("show " .. name .. " on mouseover", function()
+    if (isBar[name] or isBuffs[name]) and not Try("show " .. name, function()
         saved.layers = NoteLayers(frame, {})
     end) then return end
     if Try("show " .. name .. " on its own", frame.SetParent, frame, GetStage(saved.strata)) then
@@ -295,35 +309,71 @@ local function Unstage(frame)
     end)
 end
 
--- Fades the bars on the stage in while the mouse is over them, and out after.
--- Runs only while a bar is on the stage.
+-- Fades the bars on the stage in while the mouse is over them, and out after,
+-- and the buffs in while they're wanted (BuffsActive), and out after. Runs
+-- only while a bar or the buffs are on the stage.
+local BuffsActive
 local barFader = CreateFrame("Frame")
 barFader:Hide()
 barFader:SetScript("OnUpdate", function(self, elapsed)
     local any = false
+    local faded
     for frame, saved in pairs(staged) do
-        if saved.layers then
+        local bar, buffs = isBar[saved.name], isBuffs[saved.name]
+        if bar or buffs then
             any = true
             local over = inCombat or UIParent:IsShown()
-                or (frame:IsShown() and frame:IsMouseOver(BAR_MARGIN, -BAR_MARGIN, -BAR_MARGIN, BAR_MARGIN))
+            if bar then
+                over = over or (frame:IsShown() and frame:IsMouseOver(BAR_MARGIN, -BAR_MARGIN, -BAR_MARGIN, BAR_MARGIN))
+            else
+                over = over or BuffsActive()
+            end
             local alpha = barAlpha[frame] or 0
             if over then
-                alpha = math.min(1, alpha + elapsed / BAR_FADE_IN)
+                alpha = math.min(1, alpha + elapsed / (bar and BAR_FADE_IN or BUFF_FADE))
             else
-                alpha = math.max(0, alpha - elapsed / BAR_FADE_OUT)
+                alpha = math.max(0, alpha - elapsed / (bar and BAR_FADE_OUT or BUFF_FADE))
             end
             if alpha ~= barAlpha[frame] then
                 barAlpha[frame] = alpha
                 frame:SetAlpha(alpha)
+                -- Faded out: off the stage.
+                if buffs and alpha == 0 and not over then faded = frame end
             end
         end
     end
+    if faded then Unstage(faded) end
     if not any then self:Hide() end
 end)
 
+local function Typing()
+    return chatBox ~= nil and chatBox:HasFocus()
+end
+
 local function ChatActive()
-    if chatBox and chatBox:HasFocus() then return true end
-    return GetTime() < chatUntil
+    return Typing() or GetTime() < chatUntil
+end
+
+-- A buff of yours with BUFF_WARNING_TIME left or less: Blizzard's flashes then.
+-- Times the client keeps secret don't count.
+local function BuffRunningOut()
+    if not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return false end
+    local warning = BUFF_WARNING_TIME or 31
+    local now = GetTime()
+    for i = 1, 40 do
+        local aura = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
+        if not aura then break end
+        local expires = aura.expirationTime
+        if expires ~= nil and not (issecretvalue and issecretvalue(expires))
+            and expires > 0 and expires - now <= warning then
+            return true
+        end
+    end
+    return false
+end
+
+BuffsActive = function()
+    return settings.buffs and (GetTime() < buffsUntil or BuffRunningOut())
 end
 
 -- While the UI is hidden, open solo windows and the ALWAYS frames sit on the
@@ -392,6 +442,9 @@ local function SyncStage()
         end
         if settings.minimap then Keep(MINIMAP) end
         if settings.bars then Keep(BARS) end
+        -- Still fading out, too.
+        local buffFrame = _G[BUFFS[1]]
+        if BuffsActive() or (buffFrame and (barAlpha[buffFrame] or 0) > 0) then Keep(BUFFS) end
         for i = 1, NUM_CHAT_WINDOWS or 10 do
             for _, name in ipairs({ "ChatFrame" .. i, "ChatFrame" .. i .. "EditBox" }) do
                 local frame = _G[name]
@@ -412,7 +465,7 @@ local function SyncStage()
         if not want[frame] then Unstage(frame) end
     end
     for frame, saved in pairs(staged) do
-        if saved.layers then
+        if isBar[saved.name] or isBuffs[saved.name] then
             if hidden then
                 frame:SetAlpha(barAlpha[frame] or 0)
                 barFader:Show()
@@ -566,7 +619,9 @@ EvaluateNow = function()
     local why = Wanted()
     if why and (uiOff or not UIParent:IsShown()) then
         SetUI(true)
-    elseif not why and UIParent:IsShown() and not InCombatLockdown() then
+    -- Hiding the UI closes the edit box you're typing in (a fight ending
+    -- mid-sentence): wait until you send or close it.
+    elseif not why and UIParent:IsShown() and not InCombatLockdown() and not Typing() then
         SetUI(false)
     end
     -- Solo off: the UI is back, so the bag key works now.
@@ -688,6 +743,8 @@ local function HookChat()
             end)
             box:HookScript("OnEditFocusLost", function()
                 chatUntil = GetTime() + CHAT_LINGER
+                -- The UI may have waited for you to finish typing.
+                Evaluate()
                 C_Timer.After(CHAT_LINGER + 0.1, Evaluate)
             end)
         end
@@ -909,7 +966,32 @@ function EVENTS.ADDON_LOADED(name)
     if loaded and not UIParent:IsShown() then SyncStage() end
 end
 
+-- Esc with the UI hidden: Blizzard shows it (Game.lua) and the game menu takes
+-- a second Esc. The UI stays only ESC_LINGER seconds then, or while the menu
+-- is open. Alt+Z keeps it until the next change. Registering an Esc handler
+-- of our own (RegisterGameMenuEscHandler) is no way round this: our
+-- table.sort taints Blizzard's list of handlers, and every Esc after it is
+-- blocked (ClearTarget, the game menu).
+local ESC_LINGER = 5
+-- Each reveal by Blizzard, so a timer from an older Esc leaves a later one be.
+local reveal = 0
+local revealedAt
+
+local function HookEsc()
+    if type(ToggleGameMenu) ~= "function" then return end
+    hooksecurefunc("ToggleGameMenu", function()
+        if not (manual and revealedAt == GetTime()) then return end
+        local id = reveal
+        C_Timer.After(ESC_LINGER, function()
+            if id ~= reveal or not manual then return end
+            manual = false
+            Evaluate()
+        end)
+    end)
+end
+
 function EVENTS.PLAYER_LOGIN()
+    HookEsc()
     HookWindows()
     HookBags()
     HookChat()
@@ -921,8 +1003,11 @@ function EVENTS.PLAYER_LOGIN()
         if ours or not settings.hideUI then return end
         -- Esc or Alt+Z with a window on its own closes the window.
         if CloseSolo() then return end
-        -- Otherwise keep the UI until the next change.
+        -- Otherwise keep the UI: for a moment after Esc (HookEsc), until the
+        -- next change after Alt+Z.
         manual = true
+        reveal = reveal + 1
+        revealedAt = GetTime()
     end)
     loaded = true
 end
@@ -985,6 +1070,53 @@ end
 function EVENTS.UNIT_HEALTH() Evaluate() end
 EVENTS.UNIT_FLAGS = EVENTS.UNIT_HEALTH
 
+-- A buff gained, or renewed (its time left back to full): your buffs show for
+-- a moment. Not on a full update (logging in, zoning). A secret aura counts
+-- when it's new.
+local function Fresh(aura, now)
+    for _, value in ipairs({ aura.isHelpful, aura.duration, aura.expirationTime }) do
+        if issecretvalue and issecretvalue(value) then return false end
+    end
+    local duration, expires = aura.duration, aura.expirationTime
+    return aura.isHelpful and type(duration) == "number" and type(expires) == "number"
+        and duration > 0 and expires - now >= duration - 1
+end
+
+function EVENTS.UNIT_AURA(_, info)
+    if settings.buffs and info and not info.isFullUpdate then
+        local now = GetTime()
+        local gained = false
+        for _, aura in ipairs(info.addedAuras or {}) do
+            local helpful = aura.isHelpful
+            if helpful or (issecretvalue and issecretvalue(helpful)) then gained = true end
+        end
+        if C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID then
+            for _, id in ipairs(info.updatedAuraInstanceIDs or {}) do
+                local aura = C_UnitAuras.GetAuraDataByAuraInstanceID("player", id)
+                if aura and Fresh(aura, now) then gained = true end
+            end
+        end
+        if gained then
+            buffsUntil = now + BUFF_LINGER
+            C_Timer.After(BUFF_LINGER + 0.1, Evaluate)
+        end
+    end
+    -- A buff that ran out takes the bar with it.
+    Evaluate()
+end
+
+-- A buff entering its last seconds sends no event: look once a second.
+local buffWatch = CreateFrame("Frame")
+local buffWatchElapsed = 0
+buffWatch:SetScript("OnUpdate", function(_, elapsed)
+    buffWatchElapsed = buffWatchElapsed + elapsed
+    if buffWatchElapsed < 1 then return end
+    buffWatchElapsed = 0
+    if not (loaded and settings.buffs) or UIParent:IsShown() then return end
+    local frame = _G[BUFFS[1]]
+    if frame and not staged[frame] and BuffsActive() then Evaluate() end
+end)
+
 EVENTS.GLOBAL_MOUSE_DOWN = ClickStarted
 EVENTS.GLOBAL_MOUSE_UP = ClickEnded
 
@@ -992,6 +1124,8 @@ local listener = CreateFrame("Frame")
 for event in pairs(EVENTS) do
     if event == "UNIT_HEALTH" or event == "UNIT_FLAGS" then
         listener:RegisterUnitEvent(event, "target")
+    elseif event == "UNIT_AURA" then
+        listener:RegisterUnitEvent(event, "player")
     else
         -- pcall: an event this client doesn't have only loses its feature.
         pcall(listener.RegisterEvent, listener, event)
@@ -1105,9 +1239,15 @@ SLASH_DUIBARS1 = "/dui-bars"
 SlashCmdList.DUIBARS = MakeToggle("bars")
 SLASH_DUIMESSAGES1 = "/dui-messages"
 SlashCmdList.DUIMESSAGES = MakeToggle("messages")
+SLASH_DUIBUFFS1 = "/dui-buffs"
+SlashCmdList.DUIBUFFS = MakeToggle("buffs")
 SLASH_DUIARROW1 = "/dui-arrow"
 SlashCmdList.DUIARROW = MakeToggle("arrow")
 SLASH_DUIGROUP1 = "/dui-group"
 SlashCmdList.DUIGROUP = MakeToggle("group")
 SLASH_DUISTATUS1 = "/dui-status"
 SlashCmdList.DUISTATUS = Status
+
+-- Key Bindings, in a section of its own: a key for /dui-hide (Bindings.xml).
+BINDING_HEADER_DYNAMICIMMERSIVEUI = TITLE
+BINDING_NAME_DYNAMICIMMERSIVEUI_HIDE = "Hide the UI (on/off)"

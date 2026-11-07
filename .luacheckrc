@@ -5,12 +5,15 @@ exclude_files = { ".release" }
 files["tests/"] = { self = false }
 
 globals = {
+    "BINDING_HEADER_DYNAMICIMMERSIVEUI",
+    "BINDING_NAME_DYNAMICIMMERSIVEUI_HIDE",
     "DynamicImmersiveUI_OnAddonCompartmentClick",
     "DynamicImmersiveUI_OnAddonCompartmentEnter",
     "DynamicImmersiveUI_OnAddonCompartmentLeave",
     "DynamicImmersiveUIDB",
     "SLASH_DUIARROW1",
     "SLASH_DUIBARS1",
+    "SLASH_DUIBUFFS1",
     "SLASH_DUIGROUP1",
     "SLASH_DUIHELP1",
     "SLASH_DUIHIDE1",
@@ -25,7 +28,8 @@ globals = {
 
 read_globals = {
     "AddonCompartmentFrame",
-    "C_AddOns", "C_Timer",
+    "BUFF_WARNING_TIME",
+    "C_AddOns", "C_Timer", "C_UnitAuras",
     "CreateSettingsListSectionHeaderInitializer",
     "GameTooltip",
     "GameTooltip_AddNormalLine",
@@ -52,6 +56,7 @@ read_globals = {
     "SetUIVisibility",
     "Settings",
     "SettingsPanel",
+    "ToggleGameMenu",
     "ShowUIPanel",
     "UIParent",
     "UnitExists",
