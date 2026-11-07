@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.4
+
+- Fixed: after opening the bank (or a vendor, a quest giver…) with the UI hidden, using an item from your bags was blocked for the rest of the session ("DynamicImmersiveUI has been blocked from an action only available to the Blizzard UI").
+
 ## v0.3.3
 
 - New option, off at first: hide your party and raid members on the world map (`/dui-group`). Hiding your arrow now hides only your arrow; before, it hid your group too.
