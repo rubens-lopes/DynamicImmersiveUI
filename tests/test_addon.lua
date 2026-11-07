@@ -975,7 +975,42 @@ Test("a quest from an object shows on its own and stays open", function()
     Eq(env.OnStage("QuestFrame"), true, "quest window on the stage")
     env.G.QuestFrame:Hide()
     env.Tick()
-    Eq(env.G.QuestFrame.parent, env.UIParent, "quest window parent after closing")
+    Eq(env.UIParent.shown, false, "UI shown after closing")
+    Eq(env.OnStage("QuestFrame"), true, "closed quest window waits on the stage")
+    env.unit.exists = true
+    env.Fire("PLAYER_TARGET_CHANGED")
+    env.Tick()
+    Eq(env.G.QuestFrame.parent, env.UIParent, "quest window parent with the UI back")
+end)
+
+-- Shown under the hidden UI, a window's OnShow waits until we make it
+-- visible, and runs in our code: what it sets is tainted (the bank's tab
+-- blocked every right-click on a bag item). Already on the stage, it runs
+-- in Blizzard's.
+Test("interaction windows wait on the stage closed, so they open visible", function()
+    local env = Load()
+    local quest = env.G.QuestFrame
+    Eq(quest.shown, false, "quest window open")
+    Eq(env.OnStage("QuestFrame"), true, "closed quest window on the stage")
+    local visible
+    quest:HookScript("OnShow", function() visible = quest:IsVisible() end)
+    env.G.ShowUIPanel(quest)
+    Eq(visible, true, "visible as Blizzard opens it")
+    env.Tick()
+    -- Closed and reopened in the same frame, it never leaves the stage.
+    visible = nil
+    quest:Hide()
+    quest:Show()
+    Eq(visible, true, "visible as Blizzard reopens it")
+end)
+
+Test("Esc closes an interaction window that waited on the stage", function()
+    local env = Load()
+    env.G.ShowUIPanel(env.G.QuestFrame)
+    env.Tick()
+    env.Tick()
+    env.UIParent:Show()
+    Eq(env.G.QuestFrame.shown, false, "quest window open after Esc")
 end)
 
 Test("/dui-solo off: a quest from an object still shows on its own", function()

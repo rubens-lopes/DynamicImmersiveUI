@@ -261,7 +261,12 @@ end
 local staged = {}
 
 local function Stage(name, frame, solo)
-    if staged[frame] or menus[frame] then return end
+    if menus[frame] then return end
+    -- Waiting on the stage closed, now open (or the other way round).
+    if staged[frame] then
+        staged[frame].solo = solo
+        return
+    end
     if frame:IsProtected() and InCombatLockdown() then return end
     local saved = { name = name, parent = frame:GetParent(), alpha = frame:GetAlpha(),
         strata = frame:GetFrameStrata(), solo = solo }
@@ -355,6 +360,19 @@ local function SyncStage()
         end
         for frame, name in pairs(talking) do
             if frame:IsShown() and Solo(name, frame) then want[frame], solo[frame] = name, true end
+        end
+        -- Interaction windows wait on the stage, closed, so that Blizzard
+        -- opening one runs its OnShow in Blizzard's code. Run from ours (the
+        -- window put on the stage open, or the UI coming back), whatever it
+        -- sets is tainted, and Blizzard's code reading it later is blocked:
+        -- the bank's tab, read by every right-click on a bag item, made
+        -- using items fail for the rest of the session.
+        for _, name in ipairs(INTERACTIONS) do
+            local frame = _G[name]
+            if type(frame) == "table" and frame.GetParent and not frame:IsShown()
+                and (staged[frame] or frame:GetParent() == UIParent) then
+                want[frame] = name
+            end
         end
         -- Only the ones directly under UIParent: a mirror timer inside its
         -- container moves with it.
@@ -627,7 +645,9 @@ local function HookWindow(name, frame)
         Evaluate()
     end)
     frame:HookScript("OnHide", function()
-        if staged[frame] then Unstage(frame) end
+        -- An interaction window stays to wait for the next one: Blizzard may
+        -- open it again at once (one gossip page after another).
+        if staged[frame] and not (isInteraction[name] and not UIParent:IsShown()) then Unstage(frame) end
         extra[frame] = nil
         talking[frame] = nil
         if name == "GameMenuFrame" then manual = false end
@@ -884,6 +904,9 @@ function EVENTS.ADDON_LOADED(name)
         end
     end
     HookWindows()
+    -- The auction house and the trainer load as you talk to them, and open
+    -- right after: on the stage first (see SyncStage).
+    if loaded and not UIParent:IsShown() then SyncStage() end
 end
 
 function EVENTS.PLAYER_LOGIN()
