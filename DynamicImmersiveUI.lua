@@ -188,6 +188,7 @@ local ALWAYS = {
 -- Also always visible while the minimap option is on. The cluster holds the
 -- minimap; Minimap itself counts only if something moved it out.
 local MINIMAP = { "MinimapCluster", "Minimap" }
+local isMinimap = { MinimapCluster = true, Minimap = true }
 
 -- With the bars option on, also on the stage, faded out unless the mouse is
 -- over them. Only the ones directly under UIParent, where Edit Mode keeps
@@ -274,6 +275,18 @@ end
 -- sit lower than the frames around it.
 local staged = {}
 
+-- SetParent for a frame, skipping hooks put on that one frame: SexyMap
+-- parents Minimap to UIParent and puts it back there whenever its SetParent
+-- runs. Only for the minimap; other frames keep their addons' hooks.
+local function SetParentOf(name, frame)
+    if isMinimap[name] then
+        local meta = getmetatable(frame)
+        local methods = meta and type(meta.__index) == "table" and meta.__index
+        if methods and methods.SetParent then return methods.SetParent end
+    end
+    return frame.SetParent
+end
+
 local function Stage(name, frame, solo)
     if menus[frame] then return end
     -- Waiting on the stage closed, now open (or the other way round).
@@ -287,7 +300,10 @@ local function Stage(name, frame, solo)
     if (isBar[name] or isBuffs[name]) and not Try("show " .. name, function()
         saved.layers = NoteLayers(frame, {})
     end) then return end
-    if Try("show " .. name .. " on its own", frame.SetParent, frame, GetStage(saved.strata)) then
+    local stage = GetStage(saved.strata)
+    -- Another addon may have put it back at once.
+    if Try("show " .. name .. " on its own", SetParentOf(name, frame), frame, stage)
+        and frame:GetParent() == stage then
         staged[frame] = saved
         if solo then NudgeMoveAny() end
     end
@@ -300,7 +316,7 @@ local function Unstage(frame)
     staged[frame] = nil
     barAlpha[frame] = nil
     Try("put " .. saved.name .. " back", function()
-        frame:SetParent(saved.parent)
+        SetParentOf(saved.name, frame)(frame, saved.parent)
         -- Only frames that had a strata of their own, like tooltips: a bag
         -- is already right, and setting it would cover its buttons.
         if frame:GetFrameStrata() ~= saved.strata then frame:SetFrameStrata(saved.strata) end
@@ -455,8 +471,21 @@ local function SyncStage()
                 end
             end
         end
+        -- Tabs only while chat shows; Blizzard fades them as usual. Docked
+        -- ones move with the dock, undocked ones sit under UIParent.
+        local active = ChatActive()
+        local tabs = { "GeneralDockManager" }
+        for i = 1, NUM_CHAT_WINDOWS or 10 do tabs[#tabs + 1] = "ChatFrame" .. i .. "Tab" end
+        for _, name in ipairs(tabs) do
+            local frame = _G[name]
+            if type(frame) == "table" and frame.GetParent then
+                -- Docked meanwhile: it lives in the dock now, not on the stage.
+                if staged[frame] and not isStage[frame:GetParent()] then staged[frame] = nil end
+                if active and (staged[frame] or frame:GetParent() == UIParent) then want[frame] = name end
+            end
+        end
         for frame, name in pairs(want) do Stage(name, frame, solo[frame]) end
-        local alpha = ChatActive() and 1 or 0
+        local alpha = active and 1 or 0
         for _, frame in ipairs(chats) do
             if staged[frame] then frame:SetAlpha(alpha) end
         end

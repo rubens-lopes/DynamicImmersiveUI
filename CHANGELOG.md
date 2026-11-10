@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.4.1
+
+- Fixed: with SexyMap, the minimap hid with the rest of the UI even with "Minimap always visible" on.
+- Chat tabs show with chat while the UI is hidden.
+
 ## v0.4.0
 
 - Your buffs show with the UI hidden, fading in for 5 seconds when you gain or renew one, and while one has less than 30 seconds left. Switch it off with `/dui-buffs off` or in the options panel.

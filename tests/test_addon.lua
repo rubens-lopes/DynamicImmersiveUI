@@ -188,6 +188,9 @@ local function Load(opts)
     NewFrame("ContainerFrameCombinedBags", UIParent, false)
     NewFrame("ChatFrame1", UIParent, true)
     NewFrame("ChatFrame1EditBox", UIParent, true)
+    -- Docked tabs live in the dock.
+    NewFrame("GeneralDockManager", UIParent, true).strata = "LOW"
+    NewFrame("ChatFrame1Tab", G.GeneralDockManager, true)
     NewFrame("GameTooltip", UIParent, false).strata = "TOOLTIP"
     -- Owners are kept as given; the client would hide one owned by a hidden frame.
     local itemRef = NewFrame("ItemRefTooltip", UIParent, false)
@@ -347,6 +350,19 @@ local function Load(opts)
             for _, name in ipairs({ "WorldMapFrame", "CharacterFrame" }) do
                 if G[name]:IsVisible() then env.moveAnySaw[name] = true end
             end
+        end)
+    end
+
+    -- SexyMap takes the minimap out of its cluster to UIParent and puts it
+    -- back there whenever its SetParent runs (a hook on the frame itself;
+    -- the client keeps the method in the frame's metatable).
+    if opts.sexyMap then
+        local minimap = G.Minimap
+        setmetatable(minimap, { __index = { SetParent = minimap.SetParent } })
+        minimap.SetParent = nil
+        minimap:SetParent(UIParent)
+        G.hooksecurefunc(minimap, "SetParent", function()
+            getmetatable(minimap).__index.SetParent(minimap, UIParent)
         end)
     end
 
@@ -745,6 +761,31 @@ Test("chat sits on the stage, faded out unless typing", function()
     Eq(box.alpha, 0, "alpha after the linger")
 end)
 
+Test("chat tabs show whenever chat does", function()
+    local env = Load()
+    local G = env.G
+    local box = G.ChatFrame1EditBox
+    Eq(env.OnStage("GeneralDockManager"), false, "dock on the stage while chat is hidden")
+    box.focus = true
+    box:Run("OnEditFocusGained")
+    env.Tick()
+    Eq(env.OnStage("GeneralDockManager"), true, "dock on the stage while typing")
+    Eq(G.GeneralDockManager.strata, "LOW", "dock strata")
+    Eq(G.ChatFrame1Tab.parent, G.GeneralDockManager, "docked tab's parent")
+    -- Undocked: Blizzard hands the tab to UIParent.
+    G.ChatFrame1Tab:SetParent(env.UIParent)
+    box:Run("OnEditFocusGained")
+    env.Tick()
+    Eq(env.OnStage("ChatFrame1Tab"), true, "undocked tab on the stage")
+    -- Docked again while on the stage: the dock has it now.
+    G.ChatFrame1Tab:SetParent(G.GeneralDockManager)
+    box.focus = false
+    box:Run("OnEditFocusLost")
+    env.Tick(6)
+    Eq(env.OnStage("GeneralDockManager"), false, "dock on the stage after the linger")
+    Eq(G.ChatFrame1Tab.parent, G.GeneralDockManager, "redocked tab's parent")
+end)
+
 Test("a fight ending while you type leaves the UI until you send", function()
     local env = Load()
     env.Fire("PLAYER_REGEN_DISABLED")
@@ -1109,6 +1150,18 @@ Test("the minimap stays visible, unless /dui-minimap off", function()
     Eq(env.G.MinimapCluster.parent, env.UIParent, "cluster parent with the option off")
     env.Slash("DUIMINIMAP", "on")
     Eq(env.OnStage("MinimapCluster"), true, "cluster on the stage again")
+end)
+
+Test("the minimap stays visible with SexyMap", function()
+    local env = Load({ sexyMap = true })
+    Eq(env.OnStage("Minimap"), true, "minimap on the stage")
+    env.Fire("PLAYER_REGEN_DISABLED")
+    Eq(env.G.Minimap.parent, env.UIParent, "minimap back under UIParent with the UI")
+    env.Fire("PLAYER_REGEN_ENABLED")
+    env.Tick()
+    Eq(env.OnStage("Minimap"), true, "minimap on the stage again")
+    env.Slash("DUIMINIMAP", "off")
+    Eq(env.G.Minimap.parent, env.UIParent, "minimap parent with the option off")
 end)
 
 Test("a quest from an object shows on its own and stays open", function()
