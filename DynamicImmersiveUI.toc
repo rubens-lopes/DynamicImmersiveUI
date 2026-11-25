@@ -12,3 +12,4 @@
 
 DynamicImmersiveUI.lua
 Options.lua
+Notice.lua

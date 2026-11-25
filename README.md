@@ -1,5 +1,7 @@
 # Dynamic Immersive UI
 
+> **No longer actively maintained.** Thank you all for using it! For the same kind of immersion, try [Forever Immersion](https://www.curseforge.com/wow/addons/forever-immersion).
+
 A World of Warcraft: Forever addon for immersion. The whole UI hides the way Alt+Z hides it, and comes back only when you need it:
 
 - in combat,

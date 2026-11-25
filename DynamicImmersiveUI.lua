@@ -551,6 +551,14 @@ local function LiveTarget()
     return not dead
 end
 
+-- The name of an open NPC window (see EvaluateNow), or nil.
+local function Interacting()
+    for _, name in ipairs(INTERACTIONS) do
+        local frame = _G[name]
+        if type(frame) == "table" and frame.IsShown and frame:IsShown() then return name end
+    end
+end
+
 -- Why the UI should show right now, or nil.
 local function Wanted()
     if not settings.hideUI then return "hiding is off" end
@@ -646,12 +654,20 @@ EvaluateNow = function()
     if not loaded then return end
     if pendingBag and (settings.solo or next(talking)) and not UIParent:IsShown() and not inCombat then BagAlone() end
     local why = Wanted()
-    if why and (uiOff or not UIParent:IsShown()) then
-        SetUI(true)
-    -- Hiding the UI closes the edit box you're typing in (a fight ending
-    -- mid-sentence): wait until you send or close it.
-    elseif not why and UIParent:IsShown() and not InCombatLockdown() and not Typing() then
-        SetUI(false)
+    -- Talking to an NPC (bank, vendor, mailbox…): the UI stays as it is until
+    -- the window closes. Hiding or showing it now hides or shows the window
+    -- from our code, and Blizzard's OnShow then runs tainted: the bank sets
+    -- its tab there, and every right-click on a bag item reads it, so using
+    -- items was blocked for the rest of the session. Combat still wins.
+    -- The window's OnHide evaluates again once it closes.
+    if inCombat or not Interacting() then
+        if why and (uiOff or not UIParent:IsShown()) then
+            SetUI(true)
+        -- Hiding the UI closes the edit box you're typing in (a fight ending
+        -- mid-sentence): wait until you send or close it.
+        elseif not why and UIParent:IsShown() and not InCombatLockdown() and not Typing() then
+            SetUI(false)
+        end
     end
     -- Solo off: the UI is back, so the bag key works now.
     if pendingBag and UIParent:IsShown() then
@@ -1228,6 +1244,8 @@ local function Status()
         Line(("  %s: %s"):format(option.label, settings[option.key] and "on" or "off"))
     end
     Line(("  UI shown: %s, because: %s"):format(tostring(UIParent:IsShown()), Wanted() or "nothing"))
+    local npc = Interacting()
+    if npc then Line("  left as it is while " .. npc .. " is open") end
     local names = {}
     for _, saved in pairs(staged) do names[#names + 1] = saved.name end
     table.sort(names)

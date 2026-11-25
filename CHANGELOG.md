@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.4.2
+
+- Dynamic Immersive UI is no longer actively maintained. Thank you all for using it! For the same kind of immersion, try [Forever Immersion](https://www.curseforge.com/wow/addons/forever-immersion). A notice says so once at login; `/dui-notice` shows it again.
+- Fixed: using an item from your bags could still be blocked after visiting the bank ("DynamicImmersiveUI has been blocked from an action only available to the Blizzard UI"). While a bank, vendor, mailbox or other NPC window is open, the UI now stays as it is (hidden or shown) until you close it; combat still brings it back.
+
 ## v0.4.1
 
 - Fixed: with SexyMap, the minimap hid with the rest of the UI even with "Minimap always visible" on.

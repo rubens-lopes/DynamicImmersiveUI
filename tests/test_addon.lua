@@ -733,6 +733,45 @@ Test("a letter opens on its own and keeps the mailbox open", function()
     Eq(env.OnStage("MailFrame"), true, "mail on the stage after closing the letter")
 end)
 
+-- Showing or hiding the UI with the window open would run its OnShow from our
+-- code: the bank's tab, set there, then blocks using items from the bags.
+Test("an NPC window open: the UI stays as it is until it closes", function()
+    local env = Load()
+    -- Right-click on the NPC: target and window in the same frame.
+    env.unit.exists = true
+    env.Fire("PLAYER_TARGET_CHANGED")
+    env.OpenMailbox()
+    env.Tick()
+    env.Tick()
+    Eq(env.UIParent.shown, false, "UI shown for the target with the window open")
+    Eq(env.mailClosed, nil, "mail closed")
+    env.unit.exists = false
+    env.Fire("PLAYER_TARGET_CHANGED")
+    env.Tick()
+    Eq(env.OnStage("MailFrame"), true, "mail on the stage")
+    -- Closed: the target brings the UI back now.
+    env.unit.exists = true
+    env.Fire("PLAYER_TARGET_CHANGED")
+    env.G.MailFrame:Hide()
+    env.Tick()
+    Eq(env.UIParent.shown, true, "UI shown after closing the window")
+    -- Opened with the UI shown, the window doesn't hide it either.
+    env.OpenMailbox()
+    env.Tick()
+    env.unit.exists = false
+    env.Fire("PLAYER_TARGET_CHANGED")
+    env.Tick()
+    Eq(env.UIParent.shown, true, "UI hidden with the window open")
+    -- Combat still brings the UI back.
+    env.G.MailFrame:Hide()
+    env.Tick()
+    env.OpenMailbox()
+    env.Tick()
+    env.Tick()
+    env.Fire("PLAYER_REGEN_DISABLED")
+    Eq(env.UIParent.shown, true, "UI shown in combat")
+end)
+
 Test("/dui-solo off: a mailbox still opens on its own with your bags", function()
     local env = Load()
     env.Slash("DUISOLO", "off")

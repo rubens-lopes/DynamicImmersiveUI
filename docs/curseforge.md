@@ -21,6 +21,8 @@ The UI hides like Alt+Z and comes back only for combat, a target or a window. Ma
 
 ## Description
 
+**No longer actively maintained.** Thank you all for using it! For the same kind of immersion, try [Forever Immersion](https://www.curseforge.com/wow/addons/forever-immersion).
+
 Dynamic Immersive UI is for players who want to see the world, not the interface. For World of Warcraft: Forever. A companion to Dynamic Display Nameplate.
 
 ![The same moment with the UI and without it](IMAGE:antes-depois.jpg)
